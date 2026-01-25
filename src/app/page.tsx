@@ -8,26 +8,37 @@ import { CategoryDistribution } from "@/features/subscriptions/components/Catego
 import { BackgroundGlow } from "@/components/ui/background-glow";
 import { EnsoLogo } from "@/components/ui/enso-logo";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import {
   Wallet,
   TrendingUp,
   LayoutGrid,
   Calendar as CalendarIcon,
+  Plus,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { convertToEur, formatCurrency } from "@/lib/currency";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CalendarView } from "@/features/calendar/CalendarView";
-import { ThemeToggle } from "@/components/ui/theme-toggle"; // <--- Importar Toggle
+import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { CommandMenu } from "@/components/command-menu";
 
 export default function DashboardPage() {
-  const { subscriptions, fetchSubscriptions, deleteSubscription, isLoading } =
-    useSubscriptionStore();
+  const {
+    subscriptions,
+    fetchSubscriptions,
+    deleteSubscription,
+    isLoading,
+    currentView, // Estado Global de la vista
+    setView, // Acción para cambiar vista
+    openModal, // Acción para abrir el modal global
+  } = useSubscriptionStore();
 
   useEffect(() => {
     fetchSubscriptions();
   }, [fetchSubscriptions]);
 
+  // Cálculo del KPI normalizado a EUR
   const monthlyTotal = subscriptions.reduce((acc, sub) => {
     let priceInEur = convertToEur(sub.price, sub.currency);
     if (sub.billingCycle === "yearly") priceInEur = priceInEur / 12;
@@ -36,12 +47,14 @@ export default function DashboardPage() {
   }, 0);
 
   return (
-    // Quitamos 'bg-zinc-900' del main y usamos variables
-    <main className="relative min-h-screen font-sans selection:bg-primary/30 bg-background text-foreground transition-colors duration-300">
+    <main className="relative min-h-screen font-sans bg-background text-foreground transition-colors duration-300 selection:bg-primary/30">
       <BackgroundGlow />
 
+      {/* MODAL GLOBAL: Vive aquí y se controla por el Store */}
+      <SubscriptionModal />
+
       <div className="relative mx-auto max-w-6xl px-6 py-12 md:py-20 space-y-8">
-        {/* Header Responsive */}
+        {/* Header */}
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-card/50 border border-border rounded-xl backdrop-blur-md shadow-sm">
@@ -58,12 +71,26 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            <ThemeToggle /> {/* <--- Botón Light/Dark */}
-            <SubscriptionModal />
+            <CommandMenu />
+            <ThemeToggle />
+
+            {/* Este botón abre el modal global en modo "Crear" */}
+            <Button
+              size="lg"
+              className="shadow-lg shadow-primary/20"
+              onClick={() => openModal()}
+            >
+              <Plus className="mr-2 h-5 w-5" /> Add New
+            </Button>
           </div>
         </header>
 
-        <Tabs defaultValue="overview" className="space-y-8">
+        {/* Tabs Controladas por el Store */}
+        <Tabs
+          value={currentView}
+          onValueChange={(v) => setView(v as "overview" | "calendar")}
+          className="space-y-8"
+        >
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-border pb-4 gap-4">
             <TabsList className="bg-muted/50 border border-border">
               <TabsTrigger value="overview" className="gap-2">
@@ -76,26 +103,26 @@ export default function DashboardPage() {
               </TabsTrigger>
             </TabsList>
 
-            <div className="hidden md:block text-xs font-mono text-muted-foreground">
-              LOCAL STORAGE • ENCRYPTED
+            <div className="hidden md:flex items-center gap-2 text-xs font-mono text-muted-foreground bg-muted/30 px-2 py-1 rounded border border-border/50">
+              <span className="font-bold">⌘ K</span> <span>to search</span>
             </div>
           </div>
 
+          {/* VISTA OVERVIEW */}
           <TabsContent
             value="overview"
             className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500"
           >
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Left Column */}
+              {/* Columna Izquierda: Analíticas */}
               <div className="space-y-6">
                 <div className="grid gap-4">
-                  {/* KPI Card Refactorizado para usar colores semánticos */}
                   <Card className="p-6 bg-card/40 border-border backdrop-blur-md relative overflow-hidden group shadow-sm">
                     {isLoading ? (
                       <div className="space-y-4">
-                        <Skeleton className="h-4 w-24" />
-                        <Skeleton className="h-10 w-48" />
-                        <Skeleton className="h-6 w-32" />
+                        <Skeleton className="h-4 w-24 bg-muted" />
+                        <Skeleton className="h-10 w-48 bg-muted" />
+                        <Skeleton className="h-6 w-32 bg-muted" />
                       </div>
                     ) : (
                       <>
@@ -119,14 +146,14 @@ export default function DashboardPage() {
                   </Card>
 
                   {isLoading ? (
-                    <Skeleton className="h-[300px] w-full rounded-xl" />
+                    <Skeleton className="h-[300px] w-full rounded-xl bg-muted" />
                   ) : (
                     <CategoryDistribution subscriptions={subscriptions} />
                   )}
                 </div>
               </div>
 
-              {/* Right Column */}
+              {/* Columna Derecha: Lista */}
               <div className="lg:col-span-2 space-y-6">
                 <div className="flex items-center justify-between px-1">
                   <h3 className="text-xl font-semibold tracking-tight text-foreground">
@@ -140,7 +167,10 @@ export default function DashboardPage() {
                 <div className="grid gap-3">
                   {isLoading ? (
                     Array.from({ length: 3 }).map((_, i) => (
-                      <Skeleton key={i} className="h-28 w-full rounded-xl" />
+                      <Skeleton
+                        key={i}
+                        className="h-28 w-full rounded-xl bg-muted"
+                      />
                     ))
                   ) : subscriptions.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-20 border border-dashed border-border rounded-2xl bg-muted/20">
@@ -149,6 +179,13 @@ export default function DashboardPage() {
                       </div>
                       <p className="text-muted-foreground font-medium">
                         No subscriptions yet
+                      </p>
+                      <p className="text-muted-foreground/60 text-sm mt-1">
+                        Press{" "}
+                        <span className="font-mono bg-muted px-1 rounded">
+                          ⌘K
+                        </span>{" "}
+                        or click Add New
                       </p>
                     </div>
                   ) : (
@@ -165,9 +202,10 @@ export default function DashboardPage() {
             </div>
           </TabsContent>
 
+          {/* VISTA CALENDAR */}
           <TabsContent value="calendar" className="min-h-[600px]">
             {isLoading ? (
-              <Skeleton className="w-full h-[600px] rounded-xl" />
+              <Skeleton className="w-full h-[600px] bg-muted rounded-xl" />
             ) : (
               <CalendarView subscriptions={subscriptions} />
             )}

@@ -1,15 +1,29 @@
 import { create } from 'zustand';
-import { db, generateId } from '@/lib/db';
+import { db } from '@/lib/db';
 import { Subscription } from '@/types';
-import { addMonths, addYears, addWeeks } from 'date-fns';
+
+// Definimos el tipo de datos que viene del formulario (sin IDs ni fechas de sistema)
+type NewSubscriptionData = Omit<Subscription, "id" | "active" | "createdAt" | "updatedAt" | "nextPaymentDate">;
 
 interface SubscriptionState {
   subscriptions: Subscription[];
   isLoading: boolean;
   
-  // Actions
+  // UI GLOBAL STATE
+  currentView: 'overview' | 'calendar';
+  isModalOpen: boolean;
+  subscriptionToEdit: Subscription | undefined;
+
+  // ACTIONS
+  setView: (view: 'overview' | 'calendar') => void;
+  openModal: (subscription?: Subscription) => void;
+  closeModal: () => void;
+
   fetchSubscriptions: () => Promise<void>;
-  addSubscription: (data: Omit<Subscription, 'id' | 'createdAt' | 'updatedAt' | 'active' | 'nextPaymentDate'>) => Promise<void>;
+  
+  // FIX: Ahora aceptamos NewSubscriptionData en lugar de Omit<Subscription, 'id'>
+  addSubscription: (subscription: NewSubscriptionData) => Promise<void>;
+  
   deleteSubscription: (id: string) => Promise<void>;
   updateSubscription: (id: string, data: Partial<Subscription>) => Promise<void>;
 }
@@ -17,14 +31,29 @@ interface SubscriptionState {
 export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
   subscriptions: [],
   isLoading: true,
+  
+  // UI Initial State
+  currentView: 'overview',
+  isModalOpen: false,
+  subscriptionToEdit: undefined,
+
+  setView: (view) => set({ currentView: view }),
+  
+  openModal: (subscription) => set({ 
+    isModalOpen: true, 
+    subscriptionToEdit: subscription 
+  }),
+  
+  closeModal: () => set({ 
+    isModalOpen: false, 
+    subscriptionToEdit: undefined 
+  }),
 
   fetchSubscriptions: async () => {
-    set({ isLoading: true }); // Aseguramos que se activa
+    set({ isLoading: true });
     try {
-      // TRUCO PRO: Añadimos 800ms artificiales para que se vea el skeleton suave
-      // y la app no parezca que da un "glitch".
-      await new Promise((resolve) => setTimeout(resolve, 800));
-
+      // Pequeño delay artificial para que se vea el Skeleton (mejora UX)
+      await new Promise((resolve) => setTimeout(resolve, 500)); 
       const data = await db.subscriptions.orderBy('nextPaymentDate').toArray();
       set({ subscriptions: data });
     } catch (error) {
@@ -34,48 +63,39 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
     }
   },
 
+  // FIX: Lógica de creación enriquecida
   addSubscription: async (formData) => {
-    // Calculadora de fechas simple (Luego haremos una util avanzada)
-    let nextDate = new Date(formData.startDate);
-    const today = new Date();
+    const id = crypto.randomUUID();
     
-    while (nextDate < today) {
-      if (formData.billingCycle === 'monthly') nextDate = addMonths(nextDate, 1);
-      else if (formData.billingCycle === 'yearly') nextDate = addYears(nextDate, 1);
-      else if (formData.billingCycle === 'weekly') nextDate = addWeeks(nextDate, 1);
-    }
-
+    // Creamos el objeto completo para la DB
     const newSub: Subscription = {
       ...formData,
-      id: generateId(),
-      active: true,
-      nextPaymentDate: nextDate,
+      id,
+      active: true, // Por defecto activa
       createdAt: new Date(),
       updatedAt: new Date(),
+      // Inicialmente, la próxima fecha de pago es la fecha de inicio
+      // (Si es en el pasado, la lógica de visualización del calendario lo maneja, 
+      // o podríamos calcular la siguiente real aquí, pero esto basta para empezar)
+      nextPaymentDate: formData.startDate 
     };
 
     await db.subscriptions.add(newSub);
-    
-    // Recargamos para actualizar la UI al instante
-    await get().fetchSubscriptions(); 
+    await get().fetchSubscriptions();
   },
 
   deleteSubscription: async (id) => {
     await db.subscriptions.delete(id);
-    set((state) => ({
-      subscriptions: state.subscriptions.filter((sub) => sub.id !== id),
-    }));
+    await get().fetchSubscriptions();
   },
-  
+
   updateSubscription: async (id, data) => {
-    // Actualizamos en Dexie
-    await db.subscriptions.update(id, {
-      ...data,
-      updatedAt: new Date(),
-      // Recalcular nextPaymentDate si cambia la fecha de inicio o el ciclo
-      // (Por brevedad asumimos que si editas fecha, se recalcula en el componente o aquí)
+    await db.subscriptions.update(id, { 
+      ...data, 
+      updatedAt: new Date() 
+      // NOTA: Si cambias la fecha de inicio al editar, 
+      // idealmente deberíamos recalcular nextPaymentDate aquí también.
     });
-    // Refrescamos la UI
     await get().fetchSubscriptions();
   },
 }));

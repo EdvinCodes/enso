@@ -4,7 +4,7 @@ import { Trash2, CalendarClock, Pencil } from "lucide-react";
 import { Subscription } from "@/types";
 import { cn } from "@/lib/utils";
 import { differenceInDays } from "date-fns";
-import { SubscriptionModal } from "./SubscriptionModal";
+import { useSubscriptionStore } from "../store/subscription.store"; // Importamos el store
 
 interface Props {
   subscription: Subscription;
@@ -12,13 +12,15 @@ interface Props {
 }
 
 export function SubscriptionCard({ subscription, onDelete }: Props) {
+  const { openModal } = useSubscriptionStore(); // Acción global para abrir el modal
+
   const today = new Date();
   const daysUntil = differenceInDays(
     new Date(subscription.nextPaymentDate),
     today,
   );
 
-  // Colores de urgencia (se mantienen igual porque son semánticos de estado)
+  // Colores semánticos de estado (estos no cambian por tema, son indicadores)
   const urgencyColor =
     daysUntil <= 3
       ? "bg-red-500"
@@ -30,18 +32,17 @@ export function SubscriptionCard({ subscription, onDelete }: Props) {
   return (
     <Card
       className={cn(
-        // FIX: Usamos variables semánticas (bg-card, border-border, etc.)
-        // hover:bg-muted/50 crea un efecto sutil en ambos modos
         "group relative overflow-hidden border-border bg-card/60 backdrop-blur-xl transition-all duration-300 hover:border-primary/30 hover:bg-accent/50 hover:-translate-y-1",
         "shadow-sm hover:shadow-md",
         glowColor,
       )}
     >
+      {/* Indicador lateral de color */}
       <div className={cn("absolute left-0 top-0 bottom-0 w-1", urgencyColor)} />
 
       <div className="p-5 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          {/* Icono: Adaptado para que se vea bien en Light Mode */}
+          {/* Logo / Inicial */}
           <div className="h-12 w-12 rounded-xl bg-muted border border-border flex items-center justify-center shadow-sm">
             <span className="text-xl font-bold text-foreground tracking-tighter">
               {subscription.name.charAt(0).toUpperCase()}
@@ -49,7 +50,6 @@ export function SubscriptionCard({ subscription, onDelete }: Props) {
           </div>
 
           <div className="space-y-1">
-            {/* Texto: text-foreground (negro en light, blanco en dark) */}
             <h3 className="font-semibold text-foreground text-lg leading-none tracking-tight">
               {subscription.name}
             </h3>
@@ -64,7 +64,7 @@ export function SubscriptionCard({ subscription, onDelete }: Props) {
         </div>
 
         <div className="flex items-center gap-6">
-          <div className="text-right">
+          <div className="text-right hidden sm:block">
             <div className="font-mono text-xl font-bold text-foreground tracking-tight">
               {new Intl.NumberFormat("es-ES", {
                 style: "currency",
@@ -78,20 +78,17 @@ export function SubscriptionCard({ subscription, onDelete }: Props) {
           </div>
 
           <div className="flex items-center">
-            <SubscriptionModal
-              subscriptionToEdit={subscription}
-              trigger={
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  // Hover states corregidos para light mode
-                  className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground hover:bg-accent"
-                >
-                  <Pencil className="w-4 h-4" />
-                </Button>
-              }
-            />
+            {/* BOTÓN EDITAR: Llama al modal global */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground hover:bg-accent"
+              onClick={() => openModal(subscription)}
+            >
+              <Pencil className="w-4 h-4" />
+            </Button>
 
+            {/* BOTÓN BORRAR */}
             <Button
               variant="ghost"
               size="icon"
@@ -104,6 +101,7 @@ export function SubscriptionCard({ subscription, onDelete }: Props) {
         </div>
       </div>
 
+      {/* Barra de progreso inferior */}
       <div className="absolute bottom-0 left-0 h-[2px] bg-muted w-full">
         <div
           className={cn("h-full transition-all duration-1000", urgencyColor)}

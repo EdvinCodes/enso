@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
-import { CalendarIcon, Loader2, Plus } from "lucide-react";
+import { CalendarIcon, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -45,16 +45,24 @@ import {
   type SubscriptionFormValues,
 } from "@/features/subscriptions/schemas";
 import { PRESET_SERVICES } from "@/lib/constants";
-import { Subscription, Currency, SubscriptionCategory } from "@/types";
+import { Currency, SubscriptionCategory } from "@/types";
 
 interface Props {
-  subscriptionToEdit?: Subscription;
   trigger?: React.ReactNode;
 }
 
-export function SubscriptionModal({ subscriptionToEdit, trigger }: Props) {
-  const [open, setOpen] = useState(false);
-  const { addSubscription, updateSubscription } = useSubscriptionStore();
+export function SubscriptionModal({ trigger }: Props) {
+  // 1. CONEXIÓN AL STORE GLOBAL
+  // Ya no usamos estado local 'open'. Todo viene del cerebro central.
+  const {
+    isModalOpen,
+    closeModal,
+    openModal,
+    subscriptionToEdit,
+    addSubscription,
+    updateSubscription,
+  } = useSubscriptionStore();
+
   const isEditMode = !!subscriptionToEdit;
 
   const form = useForm<SubscriptionFormValues>({
@@ -69,27 +77,33 @@ export function SubscriptionModal({ subscriptionToEdit, trigger }: Props) {
     },
   });
 
+  // 2. EFECTO DE RELLENADO DE DATOS
+  // Escucha cambios en el store. Si se abre el modal y hay datos, los carga.
   useEffect(() => {
-    if (subscriptionToEdit && open) {
-      form.reset({
-        name: subscriptionToEdit.name,
-        price: subscriptionToEdit.price,
-        currency: subscriptionToEdit.currency,
-        billingCycle: subscriptionToEdit.billingCycle,
-        category: subscriptionToEdit.category,
-        startDate: new Date(subscriptionToEdit.startDate),
-      });
-    } else if (!subscriptionToEdit && open) {
-      form.reset({
-        name: "",
-        price: 0,
-        currency: "EUR",
-        billingCycle: "monthly",
-        category: "Entertainment",
-        startDate: new Date(),
-      });
+    if (isModalOpen) {
+      if (subscriptionToEdit) {
+        // MODO EDICIÓN: Cargar datos existentes
+        form.reset({
+          name: subscriptionToEdit.name,
+          price: subscriptionToEdit.price,
+          currency: subscriptionToEdit.currency,
+          billingCycle: subscriptionToEdit.billingCycle,
+          category: subscriptionToEdit.category,
+          startDate: new Date(subscriptionToEdit.startDate),
+        });
+      } else {
+        // MODO CREACIÓN: Limpiar formulario
+        form.reset({
+          name: "",
+          price: 0,
+          currency: "EUR",
+          billingCycle: "monthly",
+          category: "Entertainment",
+          startDate: new Date(),
+        });
+      }
     }
-  }, [subscriptionToEdit, open, form]);
+  }, [isModalOpen, subscriptionToEdit, form]);
 
   const isLoading = form.formState.isSubmitting;
 
@@ -100,7 +114,7 @@ export function SubscriptionModal({ subscriptionToEdit, trigger }: Props) {
       } else {
         await addSubscription(data);
       }
-      setOpen(false);
+      closeModal(); // Cerramos vía store
       form.reset();
     } catch (error) {
       console.error("Operation failed", error);
@@ -114,22 +128,22 @@ export function SubscriptionModal({ subscriptionToEdit, trigger }: Props) {
     form.setValue("category", preset.category as SubscriptionCategory);
   };
 
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger ? (
-          trigger
-        ) : (
-          <Button
-            size="lg"
-            className="shadow-lg shadow-primary/20 transition-all hover:scale-[1.02]"
-          >
-            <Plus className="mr-2 h-5 w-5" /> Add New
-          </Button>
-        )}
-      </DialogTrigger>
+  // Manejador para cerrar el modal correctamente
+  const handleOpenChange = (isOpen: boolean) => {
+    if (!isOpen) {
+      closeModal();
+    }
+  };
 
-      {/* FIX: Usamos bg-background/text-foreground para soporte Light/Dark */}
+  return (
+    <Dialog open={isModalOpen} onOpenChange={handleOpenChange}>
+      {/* Si pasamos un botón (trigger), lo renderizamos y lo conectamos al store */}
+      {trigger && (
+        <DialogTrigger asChild onClick={() => openModal()}>
+          {trigger}
+        </DialogTrigger>
+      )}
+
       <DialogContent className="sm:max-w-[500px] bg-background text-foreground border-border">
         <DialogHeader>
           <DialogTitle className="text-2xl">
@@ -149,7 +163,6 @@ export function SubscriptionModal({ subscriptionToEdit, trigger }: Props) {
                 key={preset.id}
                 type="button"
                 onClick={() => applyPreset(preset)}
-                // FIX: Estilos de botón adaptables (bg-muted)
                 className="flex flex-col items-center justify-center p-3 rounded-xl bg-muted/50 hover:bg-muted border border-border hover:border-primary/50 transition-all gap-2 group"
               >
                 <div
@@ -158,7 +171,6 @@ export function SubscriptionModal({ subscriptionToEdit, trigger }: Props) {
                 >
                   {preset.icon}
                 </div>
-                {/* FIX: Texto adaptable */}
                 <span className="text-xs text-muted-foreground group-hover:text-foreground font-medium">
                   {preset.name}
                 </span>
@@ -179,7 +191,6 @@ export function SubscriptionModal({ subscriptionToEdit, trigger }: Props) {
                     <Input
                       placeholder="Netflix, Spotify..."
                       {...field}
-                      // FIX: bg-background
                       className="bg-background border-input focus-visible:ring-primary"
                     />
                   </FormControl>
@@ -225,7 +236,6 @@ export function SubscriptionModal({ subscriptionToEdit, trigger }: Props) {
                           <SelectValue placeholder="EUR" />
                         </SelectTrigger>
                       </FormControl>
-                      {/* FIX: Dropdown Menu colors */}
                       <SelectContent className="bg-popover border-border text-popover-foreground">
                         <SelectItem value="EUR">EUR</SelectItem>
                         <SelectItem value="USD">USD</SelectItem>
@@ -315,7 +325,6 @@ export function SubscriptionModal({ subscriptionToEdit, trigger }: Props) {
                         </Button>
                       </FormControl>
                     </PopoverTrigger>
-                    {/* FIX: Calendar profesional con estilos Popover correctos */}
                     <PopoverContent
                       className="w-auto p-0 bg-popover border-border text-popover-foreground shadow-md"
                       align="start"
@@ -328,7 +337,6 @@ export function SubscriptionModal({ subscriptionToEdit, trigger }: Props) {
                           date > new Date() || date < new Date("1900-01-01")
                         }
                         initialFocus
-                        // Dejamos que Shadcn maneje los estilos internos
                         className="p-3"
                       />
                     </PopoverContent>
@@ -342,7 +350,7 @@ export function SubscriptionModal({ subscriptionToEdit, trigger }: Props) {
               <Button
                 variant="ghost"
                 type="button"
-                onClick={() => setOpen(false)}
+                onClick={closeModal} // Usamos la acción del store
               >
                 Cancel
               </Button>
