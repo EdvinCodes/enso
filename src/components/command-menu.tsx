@@ -9,6 +9,7 @@ import {
   Plus,
   Sun,
   Laptop,
+  Bell,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 
@@ -22,6 +23,11 @@ import {
   CommandSeparator,
 } from "@/components/ui/command";
 import { useSubscriptionStore } from "@/features/subscriptions/store/subscription.store";
+
+import {
+  requestNotificationPermission,
+  sendNotification,
+} from "@/lib/notifications";
 
 export function CommandMenu() {
   const [open, setOpen] = React.useState(false);
@@ -89,6 +95,27 @@ export function CommandMenu() {
                 </span>
               </CommandItem>
             ))}
+          </CommandGroup>
+
+          <CommandSeparator />
+
+          <CommandGroup heading="System">
+            <CommandItem
+              onSelect={() =>
+                run(async () => {
+                  const granted = await requestNotificationPermission();
+                  if (granted) {
+                    sendNotification(
+                      "Notifications Active",
+                      "You will now receive alerts for upcoming payments.",
+                    );
+                  }
+                })
+              }
+            >
+              <Bell className="mr-2 h-4 w-4" />
+              <span>Enable Notifications</span>
+            </CommandItem>
           </CommandGroup>
 
           <CommandSeparator />

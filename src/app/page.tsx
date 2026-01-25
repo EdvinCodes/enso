@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useSubscriptionStore } from "@/features/subscriptions/store/subscription.store";
 import { SubscriptionModal } from "@/features/subscriptions/components/SubscriptionModal";
 import { SubscriptionCard } from "@/features/subscriptions/components/SubscriptionCard";
@@ -15,6 +15,7 @@ import {
   LayoutGrid,
   Calendar as CalendarIcon,
   Plus,
+  BellRing,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { convertToEur, formatCurrency } from "@/lib/currency";
@@ -22,6 +23,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CalendarView } from "@/features/calendar/CalendarView";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { CommandMenu } from "@/components/command-menu";
+import { useSmartNotifications } from "@/hooks/use-smart-notifications";
+import {
+  requestNotificationPermission,
+  sendNotification,
+} from "@/lib/notifications";
 
 export default function DashboardPage() {
   const {
@@ -34,11 +40,45 @@ export default function DashboardPage() {
     openModal, // Acción para abrir el modal global
   } = useSubscriptionStore();
 
+  // ------------------------------------------------------------------
+  // 1. SMART NOTIFICATIONS LOGIC
+  // ------------------------------------------------------------------
+
+  // Hook silencioso que comprueba vencimientos al cargar
+  useSmartNotifications(subscriptions);
+
+  // --- FIX HYDRATION ERROR ---
+  // Inicializamos SIEMPRE en "default" para que coincida con el servidor.
+  const [permission, setPermission] = useState("default");
+
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission !== "default") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPermission(Notification.permission);
+    }
+  }, []);
+
+  const enableNotifications = async () => {
+    const granted = await requestNotificationPermission();
+    if (granted) {
+      setPermission("granted");
+      sendNotification(
+        "Notifications Active 🔔",
+        "We'll notify you 3 days before any payment.",
+      );
+    } else {
+      setPermission("denied");
+    }
+  };
+
+  // ------------------------------------------------------------------
+  // 2. DATA FETCHING & KPI
+  // ------------------------------------------------------------------
+
   useEffect(() => {
     fetchSubscriptions();
   }, [fetchSubscriptions]);
 
-  // Cálculo del KPI normalizado a EUR
   const monthlyTotal = subscriptions.reduce((acc, sub) => {
     let priceInEur = convertToEur(sub.price, sub.currency);
     if (sub.billingCycle === "yearly") priceInEur = priceInEur / 12;
@@ -54,7 +94,7 @@ export default function DashboardPage() {
       <SubscriptionModal />
 
       <div className="relative mx-auto max-w-6xl px-6 py-12 md:py-20 space-y-8">
-        {/* Header */}
+        {/* HEADER */}
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-card/50 border border-border rounded-xl backdrop-blur-md shadow-sm">
@@ -71,10 +111,23 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Botón de Notificaciones (Solo si no están activas) */}
+            {permission === "default" && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={enableNotifications}
+                className="text-muted-foreground hover:text-foreground"
+                title="Enable payment alerts"
+              >
+                <BellRing className="w-4 h-4" />
+              </Button>
+            )}
+
             <CommandMenu />
             <ThemeToggle />
 
-            {/* Este botón abre el modal global en modo "Crear" */}
+            {/* Botón Principal de Acción */}
             <Button
               size="lg"
               className="shadow-lg shadow-primary/20"
@@ -85,7 +138,7 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        {/* Tabs Controladas por el Store */}
+        {/* TABS (Controladas por Store) */}
         <Tabs
           value={currentView}
           onValueChange={(v) => setView(v as "overview" | "calendar")}
@@ -108,13 +161,13 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* VISTA OVERVIEW */}
+          {/* VISTA 1: OVERVIEW */}
           <TabsContent
             value="overview"
             className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500"
           >
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Columna Izquierda: Analíticas */}
+              {/* Columna Izquierda: KPIs & Gráficos */}
               <div className="space-y-6">
                 <div className="grid gap-4">
                   <Card className="p-6 bg-card/40 border-border backdrop-blur-md relative overflow-hidden group shadow-sm">
@@ -153,7 +206,7 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* Columna Derecha: Lista */}
+              {/* Columna Derecha: Lista de Suscripciones */}
               <div className="lg:col-span-2 space-y-6">
                 <div className="flex items-center justify-between px-1">
                   <h3 className="text-xl font-semibold tracking-tight text-foreground">
@@ -202,7 +255,7 @@ export default function DashboardPage() {
             </div>
           </TabsContent>
 
-          {/* VISTA CALENDAR */}
+          {/* VISTA 2: CALENDAR */}
           <TabsContent value="calendar" className="min-h-[600px]">
             {isLoading ? (
               <Skeleton className="w-full h-[600px] bg-muted rounded-xl" />
