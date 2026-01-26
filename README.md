@@ -20,6 +20,9 @@
     <a href="https://tailwindcss.com/">
       <img src="https://img.shields.io/badge/Tailwind-CSS-38bdf8?style=flat-square&logo=tailwind-css" alt="Tailwind" />
     </a>
+    <a href="https://web.dev/progressive-web-apps/">
+      <img src="https://img.shields.io/badge/PWA-Ready-purple?style=flat-square&logo=pwa" alt="PWA Ready" />
+    </a>
     <a href="https://dexie.org/">
       <img src="https://img.shields.io/badge/IndexedDB-Local-green?style=flat-square" alt="Local First" />
     </a>
@@ -30,35 +33,41 @@
 
 ![Dashboard Preview](./public/dashboard-screenshot.png)
 
-> _Note: Replace this image with a real screenshot of your dashboard named 'dashboard-screenshot.png' in the public folder._
-
 ## ✨ Introduction
 
 **ENSO** is a modern, privacy-focused subscription manager designed to stop you from bleeding money on forgotten services.
 
 Unlike other finance apps, **ENSO has no backend**. It leverages the browser's **IndexedDB** to store all your sensitive financial data locally on your device. We cannot see your data, sell it, or leak it.
 
-It features a high-performance **Command Palette (God Mode)**, intelligent **Calendar Views**, and **Smart Notifications** that alert you before a payment hits your card.
+Now available as an **Installable PWA**, allowing you to manage your finances offline on iOS, Android, and Desktop.
 
 ## 🚀 Key Features
 
-- **🛡️ Local-First Architecture:** Built with Dexie.js (IndexedDB). Data never leaves your browser.
+### 🆕 New in v2.4
+
+- **📱 Native PWA:** Install ENSO on your phone. Works 100% offline.
+- **🔮 Cashflow Forecast:** A 30-day predictive curve to visualize upcoming cumulative spending.
+- **🏢 Workspaces:** Separate your "Personal" expenses from "Business" overheads effortlessly.
+
+### Core Features
+
+- **🛡️ Local-First Architecture:** Built with Dexie.js. Data never leaves your device.
 - **⚡ God Mode (Cmd+K):** Navigate, search, and manage subscriptions without touching the mouse.
 - **📅 Visual Calendar:** A monthly grid view to visualize spending clusters and renewal dates.
 - **🔔 Smart Notifications:** Native system alerts 3 days before any payment is due (Serverless logic).
 - **🌍 Multi-Currency Support:** Track in USD, EUR, or GBP with real-time normalization for KPIs.
-- **🎨 Dark/Light Mode:** Beautifully crafted UI with "Midnight Glass" aesthetics using Tailwind CSS & Shadcn.
 - **📊 Interactive Analytics:** Monthly Run Rate (MRR) calculation and category distribution charts using Recharts.
 
 ## 🛠️ Tech Stack
 
 - **Framework:** [Next.js 16](https://nextjs.org/) (App Router)
 - **Language:** TypeScript
+- **PWA Engine:** `next-pwa` + Custom Service Workers
 - **Styling:** Tailwind CSS, Framer Motion, `clsx`
 - **UI Components:** [Shadcn UI](https://ui.shadcn.com/) (Radix Primitives)
 - **State Management:** Zustand (Global Store)
 - **Database:** Dexie.js (Wrapper for IndexedDB)
-- **Forms:** React Hook Form + Zod Validation
+- **Logic:** `date-fns` for complex recurring date algorithms
 - **Charts:** Recharts
 
 ## 📦 Getting Started
@@ -88,11 +97,11 @@ pnpm install
 3. **Run the development server**
 
 ```bash
-pnpm dev
+pnpm run dev
 ```
 
 4. **Open your browser**
-   Navigate to [http://localhost:3000](https://www.google.com/search?q=http://localhost:3000) to see the Landing Page.
+   Navigate to [http://localhost:3000](http://localhost:3000) to see the Landing Page.
    Click "Launch App" to access the Dashboard.
 
 ## 📂 Project Structure
@@ -102,18 +111,22 @@ src/
 ├── app/
 │   ├── page.tsx            # Landing Page (Marketing)
 │   ├── dashboard/          # The actual App (Protected route logic)
+│   ├── icons/              # Dynamic PWA Icon generation
 │   └── globals.css         # Tailwind & Global Styles
 ├── components/
-│   ├── ui/                 # Shadcn reusable components (Button, Card, etc.)
+│   ├── ui/                 # Shadcn reusable components
 │   └── command-menu.tsx    # God Mode implementation
 ├── features/
 │   ├── subscriptions/      # Core Domain Logic (Components, Store, Schema)
-│   └── calendar/           # Calendar View Logic
+│   ├── calendar/           # Calendar View Logic
+│   ├── dashboard/          # Forecast & KPI Charts
+│   └── settings/           # Data Management (Backup/Restore)
 ├── lib/
 │   ├── db.ts               # Database configuration (Dexie)
-│   ├── notifications.ts    # Notification API Logic
-│   └── currency.ts         # Currency conversion helpers
-└── hooks/                  # Custom React Hooks (useSmartNotifications)
+│   ├── dates.ts            # Centralized Date & Payment Logic
+│   ├── forecast.ts         # Cashflow Projection Algorithms
+│   └── notifications.ts    # Notification API Logic
+└── public/                 # Static assets & Manifest
 ```
 
 ## 🔮 Roadmap
@@ -122,8 +135,10 @@ src/
 - [x] Local Storage Persistence
 - [x] Dashboard & Calendar Views
 - [x] Smart Notifications
-- [ ] PWA Support (Install on Mobile)
+- [x] **PWA Support (Install on Mobile)**
+- [x] **Cashflow Forecast**
 - [ ] End-to-End Encryption Sync
+- [ ] Bank API Integration (Plaid/GoCardless)
 
 ## 🤝 Contributing
 
