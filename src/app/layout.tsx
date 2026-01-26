@@ -19,6 +19,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
+  userScalable: false, // <--- Esto hace que se sienta como App nativa (no zoom)
 };
 
 // 2. Metadata Profesional
