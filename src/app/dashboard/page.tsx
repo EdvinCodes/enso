@@ -19,7 +19,7 @@ import {
   Settings,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { convertToEur, formatCurrency } from "@/lib/currency";
+import { convertToEur, formatCurrency, getRate } from "@/lib/currency";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CalendarView } from "@/features/calendar/CalendarView";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
@@ -34,7 +34,7 @@ import { SettingsView } from "@/features/settings/SettingsView";
 import { BudgetProgress } from "@/features/subscriptions/components/BudgetProgress";
 import { CashflowChart } from "@/features/dashboard/components/CashflowChart";
 import { SubscriptionCategory } from "@/types";
-import { toast } from "sonner"; // <--- PREMIUM TOASTS
+import { toast } from "sonner";
 
 export default function DashboardPage() {
   const {
@@ -225,9 +225,23 @@ export default function DashboardPage() {
                       <h2 className="text-4xl font-bold text-foreground tracking-tight">
                         {formatCurrency(monthlyTotal)}
                       </h2>
-                      <div className="mt-4 flex items-center gap-2 text-emerald-500 text-sm bg-emerald-500/10 w-fit px-2 py-1 rounded-full border border-emerald-500/20">
-                        <TrendingUp className="w-3 h-3" />
-                        <span>Active in {currentWorkspace}</span>
+
+                      <div className="flex flex-wrap gap-2 mt-4">
+                        {/* Etiqueta Workspace */}
+                        <div className="flex items-center gap-2 text-emerald-500 text-xs bg-emerald-500/10 w-fit px-2 py-1 rounded-full border border-emerald-500/20">
+                          <TrendingUp className="w-3 h-3" />
+                          <span>{currentWorkspace}</span>
+                        </div>
+
+                        {/* NUEVA ETIQUETA: LIVE RATES */}
+                        <div
+                          className="flex items-center gap-1 text-xs text-blue-500 bg-blue-500/10 px-2 py-1 rounded-full border border-blue-500/20"
+                          title={`1 EUR = ${getRate("USD")} USD`}
+                        >
+                          <span className="font-mono font-bold">
+                            1€=${getRate("USD")}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </>

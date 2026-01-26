@@ -4,6 +4,8 @@ import { create } from "zustand";
 import { db } from "@/lib/db";
 import { Subscription, WorkspaceType, SubscriptionCategory } from "@/types";
 
+import { refreshExchangeRates } from "@/lib/currency";
+
 // Tipo para los presupuestos: { 'Entertainment': 50, 'Software': 100 }
 export type Budgets = Partial<Record<SubscriptionCategory, number>>;
 
@@ -83,10 +85,20 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
   fetchSubscriptions: async () => {
     set({ isLoading: true });
     try {
-      // 1. Cargar Suscripciones de Dexie
+      // 1. CARGAR TASAS DE CAMBIO (PARALELO)
+      // No bloqueamos la UI si la API es lenta, pero lo iniciamos
+      refreshExchangeRates().then((isLive) => {
+        if (isLive) {
+          console.log("Live rates active");
+          // Opcional: Podrías forzar un re-render aquí si fuera crítico,
+          // pero al cambiar isLoading a false abajo, React repintará de todas formas.
+        }
+      });
+
+      // 2. Cargar Suscripciones de Dexie
       const data = await db.subscriptions.toArray();
 
-      // 2. Cargar Presupuestos de LocalStorage
+      // 3. Cargar Presupuestos
       let loadedBudgets: Budgets = {};
       if (typeof window !== "undefined") {
         const saved = localStorage.getItem("enso_budgets");
