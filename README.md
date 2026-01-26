@@ -31,7 +31,7 @@
 
 <br />
 
-![Dashboard Preview](./public/dashboard-screenshot.png)
+![Dashboard Preview](./public/preview.webp)
 
 ## ✨ Introduction
 
