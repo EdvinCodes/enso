@@ -53,7 +53,7 @@ export const metadata: Metadata = {
     siteName: "ENSO",
     images: [
       {
-        url: "/preview.webp", // <--- ASEGÚRATE QUE EL NOMBRE COINCIDA CON EL ARCHIVO EN /public
+        url: "/og-image.jpg", // <--- ASEGÚRATE QUE EL NOMBRE COINCIDA CON EL ARCHIVO EN /public
         width: 1200,
         height: 630,
         alt: "ENSO Dashboard Preview",
@@ -64,7 +64,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "ENSO | Subscription Intelligence",
     description: "Secure subscription tracker with Cloud Sync.",
-    images: ["/preview.webp"], // <--- MISMO AQUÍ
+    images: ["/og-image.jpg"], // <--- MISMO AQUÍ
     creator: "@edvincodes",
   },
 
