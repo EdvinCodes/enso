@@ -5,8 +5,6 @@ import { useSubscriptionStore } from "@/features/subscriptions/store/subscriptio
 import { SubscriptionModal } from "@/features/subscriptions/components/SubscriptionModal";
 import { SubscriptionCard } from "@/features/subscriptions/components/SubscriptionCard";
 import { CategoryDistribution } from "@/features/subscriptions/components/CategoryDistribution";
-import { SettingsView } from "@/features/settings/SettingsView";
-import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { BackgroundGlow } from "@/components/ui/background-glow";
 import { EnsoLogo } from "@/components/ui/enso-logo";
 import { Card } from "@/components/ui/card";
@@ -31,28 +29,33 @@ import {
   requestNotificationPermission,
   sendNotification,
 } from "@/lib/notifications";
+import { WorkspaceSwitcher } from "@/components/workspace-switcher";
+import { SettingsView } from "@/features/settings/SettingsView";
+import { BudgetProgress } from "@/features/subscriptions/components/BudgetProgress";
+import { SubscriptionCategory } from "@/types";
 
 export default function DashboardPage() {
   const {
     subscriptions,
-    currentWorkspace,
     fetchSubscriptions,
     deleteSubscription,
     isLoading,
     currentView, // Estado Global de la vista
     setView, // Acción para cambiar vista
     openModal, // Acción para abrir el modal global
+    currentWorkspace, // Workspace actual (Personal/Business)
+    budgets, // Presupuestos definidos
   } = useSubscriptionStore();
 
   // ------------------------------------------------------------------
   // 1. SMART NOTIFICATIONS LOGIC
   // ------------------------------------------------------------------
 
-  // Hook silencioso que comprueba vencimientos al cargar
+  // Hook silencioso: Le pasamos TODAS las suscripciones (no solo las filtradas)
+  // para que avise de pagos de Business aunque estés mirando Personal.
   useSmartNotifications(subscriptions);
 
-  // --- FIX HYDRATION ERROR ---
-  // Inicializamos SIEMPRE en "default" para que coincida con el servidor.
+  // Estado local para controlar la visibilidad del botón de campanita (Hydration fix)
   const [permission, setPermission] = useState("default");
 
   useEffect(() => {
@@ -76,34 +79,53 @@ export default function DashboardPage() {
   };
 
   // ------------------------------------------------------------------
-  // 2. DATA FETCHING & KPI
+  // 2. DATA FETCHING & FILTERING
   // ------------------------------------------------------------------
 
   useEffect(() => {
     fetchSubscriptions();
   }, [fetchSubscriptions]);
 
-  // ------------------------------------------------------------------
-  // LOGICA DE FILTRADO (EL CEREBRO DEL WORKSPACE)
-  // ------------------------------------------------------------------
+  // FILTRO PRINCIPAL: Solo mostramos lo que pertenece al Workspace actual
   const filteredSubscriptions = subscriptions.filter((sub) => {
-    // Si la sub no tiene workspace (datos antiguos), asumimos que es 'personal'
-    const subWorkspace = sub.workspace || "personal";
+    const subWorkspace = sub.workspace || "personal"; // Retrocompatibilidad
     return subWorkspace === currentWorkspace;
   });
 
+  // CÁLCULO DE KPI (Monthly Run Rate)
   const monthlyTotal = filteredSubscriptions.reduce((acc, sub) => {
+    if (!sub.active) return acc;
     let priceInEur = convertToEur(sub.price, sub.currency);
     if (sub.billingCycle === "yearly") priceInEur = priceInEur / 12;
     if (sub.billingCycle === "weekly") priceInEur = priceInEur * 4;
     return acc + priceInEur;
   }, 0);
 
+  // 1. CÁLCULO DE TOTALES POR CATEGORÍA (Igual que antes)
+  const categoryMonthlyTotals = filteredSubscriptions.reduce(
+    (acc, sub) => {
+      if (!sub.active) return acc;
+      let priceInEur = convertToEur(sub.price, sub.currency);
+      if (sub.billingCycle === "yearly") priceInEur = priceInEur / 12;
+      if (sub.billingCycle === "weekly") priceInEur = priceInEur * 4;
+
+      acc[sub.category] = (acc[sub.category] || 0) + priceInEur;
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
+
+  // 2. NUEVO: FILTRAR PRESUPUESTOS ACTIVOS
+  // Solo nos interesan las categorías que tienen un límite > 0
+  const activeBudgets = (Object.keys(budgets) as SubscriptionCategory[]).filter(
+    (cat) => (budgets[cat] || 0) > 0,
+  );
+
   return (
     <main className="relative min-h-screen font-sans bg-background text-foreground transition-colors duration-300 selection:bg-primary/30">
       <BackgroundGlow />
 
-      {/* MODAL GLOBAL: Vive aquí y se controla por el Store */}
+      {/* MODAL GLOBAL */}
       <SubscriptionModal />
 
       <div className="relative mx-auto max-w-6xl px-6 py-12 md:py-20 space-y-8">
@@ -123,7 +145,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             {/* Botón de Notificaciones (Solo si no están activas) */}
             {permission === "default" && (
               <Button
@@ -137,12 +159,13 @@ export default function DashboardPage() {
               </Button>
             )}
 
+            {/* Selector de Contexto (Personal/Business) */}
             <WorkspaceSwitcher />
 
             <CommandMenu />
             <ThemeToggle />
 
-            {/* Botón Principal de Acción */}
+            {/* Botón Principal */}
             <Button
               size="lg"
               className="shadow-lg shadow-primary/20"
@@ -153,7 +176,7 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        {/* TABS (Controladas por Store) */}
+        {/* TABS PRINCIPALES */}
         <Tabs
           value={currentView}
           onValueChange={(v) =>
@@ -182,7 +205,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* VISTA 1: OVERVIEW */}
+          {/* --- VISTA: OVERVIEW --- */}
           <TabsContent
             value="overview"
             className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500"
@@ -191,6 +214,7 @@ export default function DashboardPage() {
               {/* Columna Izquierda: KPIs & Gráficos */}
               <div className="space-y-6">
                 <div className="grid gap-4">
+                  {/* KPI CARD */}
                   <Card className="p-6 bg-card/40 border-border backdrop-blur-md relative overflow-hidden group shadow-sm">
                     {isLoading ? (
                       <div className="space-y-4">
@@ -212,19 +236,49 @@ export default function DashboardPage() {
                           </h2>
                           <div className="mt-4 flex items-center gap-2 text-emerald-500 text-sm bg-emerald-500/10 w-fit px-2 py-1 rounded-full border border-emerald-500/20">
                             <TrendingUp className="w-3 h-3" />
-                            <span>Active Tracking</span>
+                            <span>Active in {currentWorkspace}</span>
                           </div>
                         </div>
                       </>
                     )}
                   </Card>
 
+                  {/* PIE CHART */}
                   {isLoading ? (
                     <Skeleton className="h-[300px] w-full rounded-xl bg-muted" />
                   ) : (
                     <CategoryDistribution
                       subscriptions={filteredSubscriptions}
                     />
+                  )}
+
+                  {/* 3. CORRECCIÓN EN LA TARJETA DE BUDGETS */}
+                  {/* Solo mostramos la tarjeta si hay al menos un presupuesto activo */}
+                  {activeBudgets.length > 0 && (
+                    <Card className="p-5 space-y-4 border-border/50 bg-card/30 backdrop-blur-sm">
+                      <div className="flex items-center gap-2 mb-2">
+                        <h4 className="font-semibold text-sm text-foreground">
+                          Budget Health
+                        </h4>
+                      </div>
+                      <div className="space-y-4">
+                        {/* Iteramos sobre los PRESUPUESTOS, no sobre los gastos */}
+                        {activeBudgets.map((cat) => {
+                          const limit = budgets[cat] || 0;
+                          const current = categoryMonthlyTotals[cat] || 0;
+
+                          return (
+                            <BudgetProgress
+                              key={cat}
+                              current={current}
+                              limit={limit}
+                              label={cat}
+                              currency="EUR"
+                            />
+                          );
+                        })}
+                      </div>
+                    </Card>
                   )}
                 </div>
               </div>
@@ -233,7 +287,7 @@ export default function DashboardPage() {
               <div className="lg:col-span-2 space-y-6">
                 <div className="flex items-center justify-between px-1">
                   <h3 className="text-xl font-semibold tracking-tight text-foreground">
-                    Active Services
+                    Active Services ({currentWorkspace})
                   </h3>
                   <span className="text-xs font-mono text-muted-foreground border border-border px-2 py-1 rounded-md">
                     {isLoading ? "..." : filteredSubscriptions.length} ITEMS
@@ -254,7 +308,7 @@ export default function DashboardPage() {
                         <EnsoLogo className="w-8 h-8 text-muted-foreground opacity-50" />
                       </div>
                       <p className="text-muted-foreground font-medium">
-                        No subscriptions yet
+                        No {currentWorkspace} subscriptions yet
                       </p>
                       <p className="text-muted-foreground/60 text-sm mt-1">
                         Press{" "}
@@ -278,15 +332,17 @@ export default function DashboardPage() {
             </div>
           </TabsContent>
 
-          {/* VISTA 2: CALENDAR */}
+          {/* --- VISTA: CALENDAR --- */}
           <TabsContent value="calendar" className="min-h-[600px]">
             {isLoading ? (
               <Skeleton className="w-full h-[600px] bg-muted rounded-xl" />
             ) : (
+              // Pasamos solo las suscripciones filtradas al calendario
               <CalendarView subscriptions={filteredSubscriptions} />
             )}
           </TabsContent>
 
+          {/* --- VISTA: SETTINGS --- */}
           <TabsContent value="settings" className="min-h-[600px]">
             <SettingsView />
           </TabsContent>

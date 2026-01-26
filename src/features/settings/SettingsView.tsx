@@ -10,10 +10,10 @@ import {
   ShieldAlert,
   FileJson,
   CheckCircle2,
-  AlertCircle,
 } from "lucide-react";
 import { exportData, importData, clearAllData } from "@/lib/data";
 import { useSubscriptionStore } from "../subscriptions/store/subscription.store";
+import { BudgetsManager } from "./BudgetsManager"; // <--- IMPORTAR
 
 export function SettingsView() {
   const { fetchSubscriptions } = useSubscriptionStore();
@@ -36,7 +36,7 @@ export function SettingsView() {
 
     try {
       const count = await importData(file);
-      await fetchSubscriptions(); // Recargar la UI
+      await fetchSubscriptions();
       setImportStatus("success");
       setTimeout(() => setImportStatus("idle"), 3000);
       alert(`Successfully imported ${count} subscriptions.`);
@@ -45,7 +45,6 @@ export function SettingsView() {
       setImportStatus("error");
       alert("Failed to import data. Please check the file format.");
     } finally {
-      // Limpiar input para permitir importar el mismo archivo de nuevo si se desea
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
@@ -53,7 +52,7 @@ export function SettingsView() {
   const handleClearData = async () => {
     if (
       confirm(
-        "ARE YOU SURE? This will permanently delete all your subscriptions. This action cannot be undone.",
+        "ARE YOU SURE? This will permanently delete all your subscriptions.",
       )
     ) {
       await clearAllData();
@@ -63,7 +62,6 @@ export function SettingsView() {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* HEADER */}
       <div>
         <h2 className="text-2xl font-bold text-foreground">Settings</h2>
         <p className="text-muted-foreground">
@@ -72,7 +70,10 @@ export function SettingsView() {
       </div>
 
       <div className="grid gap-6">
-        {/* DATA CARD */}
+        {/* 1. SMART BUDGETS (Nuevo) */}
+        <BudgetsManager />
+
+        {/* 2. DATA PORTABILITY */}
         <Card className="p-6 bg-card/40 border-border backdrop-blur-md">
           <div className="flex items-start gap-4">
             <div className="p-3 bg-blue-500/10 rounded-xl text-blue-500">
@@ -83,22 +84,18 @@ export function SettingsView() {
                 Data Portability
               </h3>
               <p className="text-sm text-muted-foreground">
-                Your data belongs to you. Export it to JSON for backup or
-                transfer it to another device.
+                Your data belongs to you. Export it to JSON for backup.
               </p>
             </div>
           </div>
-
           <div className="mt-6 flex flex-col sm:flex-row gap-4">
             <Button
               variant="outline"
               onClick={handleExport}
               className="flex-1 gap-2 border-border/50"
             >
-              <Download className="w-4 h-4" />
-              Export Backup
+              <Download className="w-4 h-4" /> Export Backup
             </Button>
-
             <div className="flex-1">
               <input
                 type="file"
@@ -114,8 +111,6 @@ export function SettingsView() {
               >
                 {importStatus === "success" ? (
                   <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                ) : importStatus === "error" ? (
-                  <AlertCircle className="w-4 h-4 text-red-500" />
                 ) : (
                   <Upload className="w-4 h-4" />
                 )}
@@ -125,7 +120,7 @@ export function SettingsView() {
           </div>
         </Card>
 
-        {/* DANGER ZONE */}
+        {/* 3. DANGER ZONE */}
         <Card className="p-6 border-red-500/20 bg-red-500/5 backdrop-blur-md">
           <div className="flex items-start gap-4">
             <div className="p-3 bg-red-500/10 rounded-xl text-red-500">
@@ -136,18 +131,15 @@ export function SettingsView() {
                 Danger Zone
               </h3>
               <p className="text-sm text-red-500/70">
-                Permanently remove all local data. This action cannot be undone
-                unless you have a backup.
+                Permanently remove all local data.
               </p>
             </div>
-
             <Button
               variant="destructive"
               onClick={handleClearData}
               className="bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20"
             >
-              <Trash2 className="w-4 h-4 mr-2" />
-              Reset App
+              <Trash2 className="w-4 h-4 mr-2" /> Reset App
             </Button>
           </div>
         </Card>

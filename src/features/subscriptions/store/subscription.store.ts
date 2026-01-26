@@ -1,26 +1,33 @@
+"use client";
+
 import { create } from "zustand";
 import { db } from "@/lib/db";
-import { Subscription, WorkspaceType } from "@/types";
+import { Subscription, WorkspaceType, SubscriptionCategory } from "@/types";
+
+// Tipo para los presupuestos: { 'Entertainment': 50, 'Software': 100 }
+export type Budgets = Partial<Record<SubscriptionCategory, number>>;
 
 interface SubscriptionState {
+  // --- STATE ---
   subscriptions: Subscription[];
   isLoading: boolean;
-
   currentView: "overview" | "calendar" | "settings";
-
   currentWorkspace: WorkspaceType;
-
   isModalOpen: boolean;
   subscriptionToEdit: Subscription | undefined;
+  budgets: Budgets; // <--- NUEVO: Presupuestos
 
+  // --- UI ACTIONS ---
   setView: (view: "overview" | "calendar" | "settings") => void;
   setWorkspace: (workspace: WorkspaceType) => void;
-
+  setCategoryBudget: (category: SubscriptionCategory, limit: number) => void; // <--- NUEVO
   openModal: (subscription?: Subscription) => void;
   closeModal: () => void;
+
+  // --- DB ACTIONS ---
   fetchSubscriptions: () => Promise<void>;
   addSubscription: (
-    subscription: Omit<
+    data: Omit<
       Subscription,
       "id" | "active" | "createdAt" | "updatedAt" | "nextPaymentDate"
     >,
@@ -33,44 +40,68 @@ interface SubscriptionState {
 }
 
 export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
+  // Estado Inicial
   subscriptions: [],
   isLoading: true,
   currentView: "overview",
-
   currentWorkspace: "personal",
-
   isModalOpen: false,
   subscriptionToEdit: undefined,
+  budgets: {}, // Inicialmente vacío
 
+  // Setters Simples
   setView: (view) => set({ currentView: view }),
   setWorkspace: (workspace) => set({ currentWorkspace: workspace }),
 
   openModal: (subscription) =>
-    set({
-      isModalOpen: true,
-      subscriptionToEdit: subscription,
-    }),
-  closeModal: () =>
-    set({
-      isModalOpen: false,
-      subscriptionToEdit: undefined,
-    }),
+    set({ isModalOpen: true, subscriptionToEdit: subscription }),
 
+  closeModal: () => set({ isModalOpen: false, subscriptionToEdit: undefined }),
+
+  // --- BUDGET LOGIC (Local Storage) ---
+  setCategoryBudget: (category, limit) => {
+    set((state) => {
+      const newBudgets = { ...state.budgets, [category]: limit };
+
+      // Persistir en LocalStorage inmediatamente
+      if (typeof window !== "undefined") {
+        localStorage.setItem("enso_budgets", JSON.stringify(newBudgets));
+      }
+
+      return { budgets: newBudgets };
+    });
+  },
+
+  // --- DB ACTIONS (Dexie + Init) ---
   fetchSubscriptions: async () => {
     set({ isLoading: true });
     try {
-      // Pequeño delay artificial para que se vea el Skeleton (mejora UX)
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      const data = await db.subscriptions.orderBy("nextPaymentDate").toArray();
-      set({ subscriptions: data });
+      // 1. Cargar Suscripciones de Dexie
+      const data = await db.subscriptions.toArray();
+
+      // 2. Cargar Presupuestos de LocalStorage
+      let loadedBudgets: Budgets = {};
+      if (typeof window !== "undefined") {
+        const saved = localStorage.getItem("enso_budgets");
+        if (saved) {
+          try {
+            loadedBudgets = JSON.parse(saved);
+          } catch (e) {
+            console.error("Failed to parse budgets", e);
+          }
+        }
+      }
+
+      set({ subscriptions: data, budgets: loadedBudgets, isLoading: false });
     } catch (error) {
       console.error("Failed to fetch subscriptions:", error);
-    } finally {
       set({ isLoading: false });
     }
   },
+
   addSubscription: async (formData) => {
     const id = crypto.randomUUID();
+    // Asignar al workspace actual si no viene definido
     const currentWorkspace = get().currentWorkspace;
 
     const newSub: Subscription = {
@@ -86,16 +117,18 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
     await db.subscriptions.add(newSub);
     await get().fetchSubscriptions();
   },
+
   deleteSubscription: async (id) => {
     await db.subscriptions.delete(id);
     await get().fetchSubscriptions();
   },
+
   updateSubscription: async (id, data) => {
     await db.subscriptions.update(id, {
       ...data,
       updatedAt: new Date(),
-      // NOTA: Si cambias la fecha de inicio al editar,
-      // idealmente deberíamos recalcular nextPaymentDate aquí también.
+      // Si cambian la fecha de inicio, recalculamos el nextPayment (opcional, simplificado por ahora)
+      ...(data.startDate ? { nextPaymentDate: data.startDate } : {}),
     });
     await get().fetchSubscriptions();
   },
