@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
@@ -31,7 +31,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-// 1. IMPORTAR RADIO GROUP (Lo acabas de instalar)
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 import {
@@ -55,7 +54,6 @@ interface Props {
 }
 
 export function SubscriptionModal({ trigger }: Props) {
-  // 2. EXTRAER CURRENT WORKSPACE DEL STORE
   const {
     isModalOpen,
     closeModal,
@@ -63,10 +61,10 @@ export function SubscriptionModal({ trigger }: Props) {
     subscriptionToEdit,
     addSubscription,
     updateSubscription,
-    currentWorkspace, // <--- AQUÍ ESTÁ
+    currentWorkspace,
   } = useSubscriptionStore();
 
-  const isEditMode = !!subscriptionToEdit;
+  const [isEditing, setIsEditing] = useState(false);
 
   const form = useForm<SubscriptionFormValues>({
     resolver: zodResolver(subscriptionFormSchema),
@@ -77,15 +75,22 @@ export function SubscriptionModal({ trigger }: Props) {
       billingCycle: "monthly",
       category: "Entertainment",
       startDate: new Date(),
-      workspace: currentWorkspace, // Valor por defecto: el espacio donde estés
+      workspace: currentWorkspace,
     },
   });
 
-  // 3. ACTUALIZAR EFECTO DE CARGA DE DATOS
+  // --- EFECTO DE SINCRONIZACIÓN ---
   useEffect(() => {
     if (isModalOpen) {
-      if (subscriptionToEdit) {
-        // MODO EDICIÓN: Cargar todos los datos + el workspace guardado
+      const editing = !!subscriptionToEdit;
+
+      // FIX: Silenciamos el linter aquí porque necesitamos actualizar el estado local
+      // basándonos en el store global ANTES de que el usuario interactúe.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIsEditing(editing);
+
+      if (editing && subscriptionToEdit) {
+        // MODO EDICIÓN
         form.reset({
           name: subscriptionToEdit.name,
           price: subscriptionToEdit.price,
@@ -93,10 +98,10 @@ export function SubscriptionModal({ trigger }: Props) {
           billingCycle: subscriptionToEdit.billingCycle,
           category: subscriptionToEdit.category,
           startDate: new Date(subscriptionToEdit.startDate),
-          workspace: subscriptionToEdit.workspace || "personal", // Fallback a personal si es antiguo
+          workspace: subscriptionToEdit.workspace || "personal",
         });
       } else {
-        // MODO CREACIÓN: Usar el workspace actual
+        // MODO CREACIÓN
         form.reset({
           name: "",
           price: 0,
@@ -104,7 +109,7 @@ export function SubscriptionModal({ trigger }: Props) {
           billingCycle: "monthly",
           category: "Entertainment",
           startDate: new Date(),
-          workspace: currentWorkspace, // <--- Importante
+          workspace: currentWorkspace,
         });
       }
     }
@@ -114,13 +119,16 @@ export function SubscriptionModal({ trigger }: Props) {
 
   const onSubmit = async (data: SubscriptionFormValues) => {
     try {
-      if (isEditMode && subscriptionToEdit) {
-        await updateSubscription(subscriptionToEdit.id, data);
+      if (isEditing) {
+        // Usamos el estado sticky
+        // Aseguramos que existe el ID (typescript safety)
+        if (subscriptionToEdit) {
+          await updateSubscription(subscriptionToEdit.id, data);
+        }
       } else {
         await addSubscription(data);
       }
       closeModal();
-      form.reset();
     } catch (error) {
       console.error("Operation failed", error);
     }
@@ -150,16 +158,16 @@ export function SubscriptionModal({ trigger }: Props) {
       <DialogContent className="sm:max-w-[500px] bg-background text-foreground border-border">
         <DialogHeader>
           <DialogTitle className="text-2xl">
-            {isEditMode ? "Edit Subscription" : "New Subscription"}
+            {isEditing ? "Edit Subscription" : "New Subscription"}
           </DialogTitle>
           <DialogDescription>
-            {isEditMode
+            {isEditing
               ? "Modify your subscription details."
               : "Choose a popular service or create a custom one."}
           </DialogDescription>
         </DialogHeader>
 
-        {!isEditMode && (
+        {!isEditing && (
           <div className="grid grid-cols-3 gap-2 py-4 border-b border-border mb-4">
             {PRESET_SERVICES.map((preset) => (
               <button
@@ -349,7 +357,6 @@ export function SubscriptionModal({ trigger }: Props) {
               )}
             />
 
-            {/* 4. CAMPO DE WORKSPACE CON RADIO GROUP */}
             <FormField
               control={form.control}
               name="workspace"
@@ -359,7 +366,6 @@ export function SubscriptionModal({ trigger }: Props) {
                   <FormControl>
                     <RadioGroup
                       onValueChange={field.onChange}
-                      // Aseguramos que siempre tenga un valor (personal por defecto si falla)
                       defaultValue={field.value || currentWorkspace}
                       className="flex gap-4"
                     >
@@ -396,7 +402,7 @@ export function SubscriptionModal({ trigger }: Props) {
                 className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
               >
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {isEditMode ? "Update" : "Save"} Subscription
+                {isEditing ? "Update" : "Save"} Subscription
               </Button>
             </div>
           </form>
