@@ -32,6 +32,7 @@ import {
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { SettingsView } from "@/features/settings/SettingsView";
 import { BudgetProgress } from "@/features/subscriptions/components/BudgetProgress";
+import { CashflowChart } from "@/features/dashboard/components/CashflowChart"; // <--- IMPORTAR
 import { SubscriptionCategory } from "@/types";
 
 export default function DashboardPage() {
@@ -40,22 +41,15 @@ export default function DashboardPage() {
     fetchSubscriptions,
     deleteSubscription,
     isLoading,
-    currentView, // Estado Global de la vista
-    setView, // Acción para cambiar vista
-    openModal, // Acción para abrir el modal global
-    currentWorkspace, // Workspace actual (Personal/Business)
-    budgets, // Presupuestos definidos
+    currentView,
+    setView,
+    openModal,
+    currentWorkspace,
+    budgets,
   } = useSubscriptionStore();
 
-  // ------------------------------------------------------------------
-  // 1. SMART NOTIFICATIONS LOGIC
-  // ------------------------------------------------------------------
-
-  // Hook silencioso: Le pasamos TODAS las suscripciones (no solo las filtradas)
-  // para que avise de pagos de Business aunque estés mirando Personal.
   useSmartNotifications(subscriptions);
 
-  // Estado local para controlar la visibilidad del botón de campanita (Hydration fix)
   const [permission, setPermission] = useState("default");
 
   useEffect(() => {
@@ -78,21 +72,15 @@ export default function DashboardPage() {
     }
   };
 
-  // ------------------------------------------------------------------
-  // 2. DATA FETCHING & FILTERING
-  // ------------------------------------------------------------------
-
   useEffect(() => {
     fetchSubscriptions();
   }, [fetchSubscriptions]);
 
-  // FILTRO PRINCIPAL: Solo mostramos lo que pertenece al Workspace actual
   const filteredSubscriptions = subscriptions.filter((sub) => {
-    const subWorkspace = sub.workspace || "personal"; // Retrocompatibilidad
+    const subWorkspace = sub.workspace || "personal";
     return subWorkspace === currentWorkspace;
   });
 
-  // CÁLCULO DE KPI (Monthly Run Rate)
   const monthlyTotal = filteredSubscriptions.reduce((acc, sub) => {
     if (!sub.active) return acc;
     let priceInEur = convertToEur(sub.price, sub.currency);
@@ -101,7 +89,6 @@ export default function DashboardPage() {
     return acc + priceInEur;
   }, 0);
 
-  // 1. CÁLCULO DE TOTALES POR CATEGORÍA (Igual que antes)
   const categoryMonthlyTotals = filteredSubscriptions.reduce(
     (acc, sub) => {
       if (!sub.active) return acc;
@@ -115,8 +102,6 @@ export default function DashboardPage() {
     {} as Record<string, number>,
   );
 
-  // 2. NUEVO: FILTRAR PRESUPUESTOS ACTIVOS
-  // Solo nos interesan las categorías que tienen un límite > 0
   const activeBudgets = (Object.keys(budgets) as SubscriptionCategory[]).filter(
     (cat) => (budgets[cat] || 0) > 0,
   );
@@ -124,8 +109,6 @@ export default function DashboardPage() {
   return (
     <main className="relative min-h-screen font-sans bg-background text-foreground transition-colors duration-300 selection:bg-primary/30">
       <BackgroundGlow />
-
-      {/* MODAL GLOBAL */}
       <SubscriptionModal />
 
       <div className="relative mx-auto max-w-6xl px-6 py-12 md:py-20 space-y-8">
@@ -146,7 +129,6 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
-            {/* Botón de Notificaciones (Solo si no están activas) */}
             {permission === "default" && (
               <Button
                 variant="ghost"
@@ -158,14 +140,9 @@ export default function DashboardPage() {
                 <BellRing className="w-4 h-4" />
               </Button>
             )}
-
-            {/* Selector de Contexto (Personal/Business) */}
             <WorkspaceSwitcher />
-
             <CommandMenu />
             <ThemeToggle />
-
-            {/* Botón Principal */}
             <Button
               size="lg"
               className="shadow-lg shadow-primary/20"
@@ -176,7 +153,7 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        {/* TABS PRINCIPALES */}
+        {/* TABS */}
         <Tabs
           value={currentView}
           onValueChange={(v) =>
@@ -205,45 +182,56 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* --- VISTA: OVERVIEW --- */}
           <TabsContent
             value="overview"
             className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500"
           >
+            {/* --- SECCIÓN SUPERIOR: KPI + PROYECCIÓN (NUEVO DISEÑO) --- */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* 1. KPI CARD (Ocupa 1 columna) */}
+              <Card className="p-6 bg-card/40 border-border backdrop-blur-md relative overflow-hidden group shadow-sm md:col-span-1 h-full flex flex-col justify-center">
+                {isLoading ? (
+                  <div className="space-y-4">
+                    <Skeleton className="h-4 w-24 bg-muted" />
+                    <Skeleton className="h-10 w-48 bg-muted" />
+                    <Skeleton className="h-6 w-32 bg-muted" />
+                  </div>
+                ) : (
+                  <>
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                      <Wallet className="w-32 h-32 rotate-[-15deg] text-foreground" />
+                    </div>
+                    <div className="relative z-10">
+                      <p className="text-sm font-medium text-muted-foreground mb-1">
+                        Monthly Run Rate (EUR)
+                      </p>
+                      <h2 className="text-4xl font-bold text-foreground tracking-tight">
+                        {formatCurrency(monthlyTotal)}
+                      </h2>
+                      <div className="mt-4 flex items-center gap-2 text-emerald-500 text-sm bg-emerald-500/10 w-fit px-2 py-1 rounded-full border border-emerald-500/20">
+                        <TrendingUp className="w-3 h-3" />
+                        <span>Active in {currentWorkspace}</span>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </Card>
+
+              {/* 2. CASHFLOW FORECAST CHART (Ocupa 2 columnas) */}
+              <div className="md:col-span-2 h-full min-h-[300px]">
+                {isLoading ? (
+                  <Skeleton className="w-full h-full rounded-xl bg-muted" />
+                ) : (
+                  <CashflowChart subscriptions={filteredSubscriptions} />
+                )}
+              </div>
+            </div>
+
+            {/* --- SECCIÓN INFERIOR: DETALLES --- */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Columna Izquierda: KPIs & Gráficos */}
               <div className="space-y-6">
                 <div className="grid gap-4">
-                  {/* KPI CARD */}
-                  <Card className="p-6 bg-card/40 border-border backdrop-blur-md relative overflow-hidden group shadow-sm">
-                    {isLoading ? (
-                      <div className="space-y-4">
-                        <Skeleton className="h-4 w-24 bg-muted" />
-                        <Skeleton className="h-10 w-48 bg-muted" />
-                        <Skeleton className="h-6 w-32 bg-muted" />
-                      </div>
-                    ) : (
-                      <>
-                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                          <Wallet className="w-32 h-32 rotate-[-15deg] text-foreground" />
-                        </div>
-                        <div className="relative z-10">
-                          <p className="text-sm font-medium text-muted-foreground mb-1">
-                            Monthly Run Rate (EUR)
-                          </p>
-                          <h2 className="text-4xl font-bold text-foreground tracking-tight">
-                            {formatCurrency(monthlyTotal)}
-                          </h2>
-                          <div className="mt-4 flex items-center gap-2 text-emerald-500 text-sm bg-emerald-500/10 w-fit px-2 py-1 rounded-full border border-emerald-500/20">
-                            <TrendingUp className="w-3 h-3" />
-                            <span>Active in {currentWorkspace}</span>
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </Card>
-
-                  {/* PIE CHART */}
+                  {/* CATEGORY DISTRIBUTION */}
                   {isLoading ? (
                     <Skeleton className="h-[300px] w-full rounded-xl bg-muted" />
                   ) : (
@@ -252,8 +240,7 @@ export default function DashboardPage() {
                     />
                   )}
 
-                  {/* 3. CORRECCIÓN EN LA TARJETA DE BUDGETS */}
-                  {/* Solo mostramos la tarjeta si hay al menos un presupuesto activo */}
+                  {/* SMART BUDGETS (Visible solo si hay presupuestos) */}
                   {activeBudgets.length > 0 && (
                     <Card className="p-5 space-y-4 border-border/50 bg-card/30 backdrop-blur-sm">
                       <div className="flex items-center gap-2 mb-2">
@@ -262,7 +249,6 @@ export default function DashboardPage() {
                         </h4>
                       </div>
                       <div className="space-y-4">
-                        {/* Iteramos sobre los PRESUPUESTOS, no sobre los gastos */}
                         {activeBudgets.map((cat) => {
                           const limit = budgets[cat] || 0;
                           const current = categoryMonthlyTotals[cat] || 0;
@@ -283,7 +269,6 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* Columna Derecha: Lista de Suscripciones */}
               <div className="lg:col-span-2 space-y-6">
                 <div className="flex items-center justify-between px-1">
                   <h3 className="text-xl font-semibold tracking-tight text-foreground">
@@ -332,17 +317,14 @@ export default function DashboardPage() {
             </div>
           </TabsContent>
 
-          {/* --- VISTA: CALENDAR --- */}
           <TabsContent value="calendar" className="min-h-[600px]">
             {isLoading ? (
               <Skeleton className="w-full h-[600px] bg-muted rounded-xl" />
             ) : (
-              // Pasamos solo las suscripciones filtradas al calendario
               <CalendarView subscriptions={filteredSubscriptions} />
             )}
           </TabsContent>
 
-          {/* --- VISTA: SETTINGS --- */}
           <TabsContent value="settings" className="min-h-[600px]">
             <SettingsView />
           </TabsContent>

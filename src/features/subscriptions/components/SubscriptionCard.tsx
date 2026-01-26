@@ -3,8 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Trash2, CalendarClock, Pencil } from "lucide-react";
 import { Subscription } from "@/types";
 import { cn } from "@/lib/utils";
-import { differenceInDays } from "date-fns";
-import { useSubscriptionStore } from "../store/subscription.store"; // Importamos el store
+import { differenceInDays, startOfDay } from "date-fns"; // <--- IMPORTANTE: Nuevos imports
+
+import { getNextPaymentDate } from "@/lib/dates";
+import { useSubscriptionStore } from "../store/subscription.store";
 
 interface Props {
   subscription: Subscription;
@@ -12,21 +14,20 @@ interface Props {
 }
 
 export function SubscriptionCard({ subscription, onDelete }: Props) {
-  const { openModal } = useSubscriptionStore(); // Acción global para abrir el modal
+  const { openModal } = useSubscriptionStore();
 
-  const today = new Date();
-  const daysUntil = differenceInDays(
-    new Date(subscription.nextPaymentDate),
-    today,
-  );
+  const nextPayment = getNextPaymentDate(subscription);
+  const daysUntil = differenceInDays(nextPayment, startOfDay(new Date()));
+  // -------------------------------------
 
-  // Colores semánticos de estado (estos no cambian por tema, son indicadores)
+  // Colores semánticos
   const urgencyColor =
     daysUntil <= 3
       ? "bg-red-500"
       : daysUntil <= 7
-        ? "bg-yellow-500"
+        ? "bg-amber-500" // Cambiado a Amber para mejor contraste que yellow
         : "bg-primary";
+
   const glowColor = daysUntil <= 3 ? "shadow-red-500/20" : "shadow-primary/20";
 
   return (
@@ -73,12 +74,13 @@ export function SubscriptionCard({ subscription, onDelete }: Props) {
             </div>
             <div className="flex items-center justify-end gap-1.5 text-xs text-muted-foreground mt-1">
               <CalendarClock className="w-3 h-3" />
+              {/* Aquí usamos el cálculo nuevo */}
               <span>{daysUntil} days left</span>
             </div>
           </div>
 
           <div className="flex items-center">
-            {/* BOTÓN EDITAR: Llama al modal global */}
+            {/* BOTÓN EDITAR */}
             <Button
               variant="ghost"
               size="icon"
@@ -105,7 +107,8 @@ export function SubscriptionCard({ subscription, onDelete }: Props) {
       <div className="absolute bottom-0 left-0 h-[2px] bg-muted w-full">
         <div
           className={cn("h-full transition-all duration-1000", urgencyColor)}
-          style={{ width: `${Math.max(5, 100 - daysUntil * 3)}%` }}
+          // Ajustamos la barra para que tenga sentido visual (30 días es el estándar visual aprox)
+          style={{ width: `${Math.max(5, 100 - (daysUntil / 30) * 100)}%` }}
         />
       </div>
     </Card>

@@ -155,7 +155,12 @@ export function SubscriptionModal({ trigger }: Props) {
         </DialogTrigger>
       )}
 
-      <DialogContent className="sm:max-w-[500px] bg-background text-foreground border-border">
+      {/* FIX RESPONSIVE:
+         - w-full: Ocupa el ancho disponible
+         - max-h-[85vh]: Nunca supera el 85% de la altura de la pantalla (deja espacio arriba y abajo)
+         - overflow-y-auto: Si el contenido es mayor que el 85%, aparece barra de scroll dentro del modal
+      */}
+      <DialogContent className="w-full sm:max-w-[500px] max-h-[90vh] overflow-y-auto bg-background text-foreground border-border">
         <DialogHeader>
           <DialogTitle className="text-2xl">
             {isEditing ? "Edit Subscription" : "New Subscription"}
