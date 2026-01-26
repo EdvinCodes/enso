@@ -123,3 +123,23 @@
     @apply bg-background text-foreground;
   }
 }
+
+@keyframes infinite-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-infinite-scroll {
+  animation: infinite-scroll 40s linear infinite;
+  display: flex; /* Asegura que los elementos se alineen */
+  width: max-content; /* Permite que el contenido sea tan ancho como necesite */
+}
+
+/* Pausar la animación si pasas el ratón por encima (Opcional, queda pro) */
+.animate-infinite-scroll:hover {
+  animation-play-state: paused;
+}
