@@ -46,28 +46,26 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "/",
+    url: "https://enso-three.vercel.app",
     title: "ENSO | Control Your Recurring Expenses",
     description:
-      "Privacy-first subscription tracker. No bank connection required.",
+      "Secure subscription tracker with Cloud Sync. No more forgotten payments.",
     siteName: "ENSO",
     images: [
       {
-        url: "/preview.webp", // Next.js lo resolverá usando metadataBase
+        url: "/preview.webp", // <--- ASEGÚRATE QUE EL NOMBRE COINCIDA CON EL ARCHIVO EN /public
         width: 1200,
         height: 630,
-        alt: "ENSO Finance OS Dashboard Preview",
+        alt: "ENSO Dashboard Preview",
       },
     ],
   },
-
   twitter: {
     card: "summary_large_image",
     title: "ENSO | Subscription Intelligence",
-    description:
-      "Privacy-first subscription tracker. No bank connection required.",
+    description: "Secure subscription tracker with Cloud Sync.",
+    images: ["/preview.webp"], // <--- MISMO AQUÍ
     creator: "@edvincodes",
-    images: ["/preview.webp"],
   },
 
   // Al tener icon.tsx, NO definimos 'icon' manualmente aquí.
