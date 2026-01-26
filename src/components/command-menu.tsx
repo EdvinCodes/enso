@@ -10,6 +10,7 @@ import {
   Sun,
   Laptop,
   Bell,
+  Settings,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 
@@ -33,6 +34,14 @@ export function CommandMenu() {
   const [open, setOpen] = React.useState(false);
   const { setTheme } = useTheme();
   const { setView, openModal, subscriptions } = useSubscriptionStore();
+
+  const [isNotifEnabled, setIsNotifEnabled] = React.useState(false);
+
+  React.useEffect(() => {
+    if (open && typeof window !== "undefined") {
+      setIsNotifEnabled(Notification.permission === "granted");
+    }
+  }, [open]);
 
   // Escuchar Cmd+K / Ctrl+K
   React.useEffect(() => {
@@ -77,48 +86,59 @@ export function CommandMenu() {
               <LayoutGrid className="mr-2 h-4 w-4" />
               <span>Go to Overview</span>
             </CommandItem>
-          </CommandGroup>
-
-          <CommandSeparator />
-
-          <CommandGroup heading="Your Stack">
-            {subscriptions.map((sub) => (
-              <CommandItem
-                key={sub.id}
-                onSelect={() => run(() => openModal(sub))} // Abre el modal en modo EDITAR
-                className="cursor-pointer"
-              >
-                <CreditCard className="mr-2 h-4 w-4 text-muted-foreground" />
-                <span>{sub.name}</span>
-                <span className="ml-auto text-xs text-muted-foreground">
-                  {sub.category}
-                </span>
-              </CommandItem>
-            ))}
-          </CommandGroup>
-
-          <CommandSeparator />
-
-          <CommandGroup heading="System">
-            <CommandItem
-              onSelect={() =>
-                run(async () => {
-                  const granted = await requestNotificationPermission();
-                  if (granted) {
-                    sendNotification(
-                      "Notifications Active",
-                      "You will now receive alerts for upcoming payments.",
-                    );
-                  }
-                })
-              }
-            >
-              <Bell className="mr-2 h-4 w-4" />
-              <span>Enable Notifications</span>
+            <CommandItem onSelect={() => run(() => setView("settings"))}>
+              <Settings className="mr-2 h-4 w-4" />
+              <span>Go to Settings</span>
             </CommandItem>
           </CommandGroup>
 
+          {/* FIX: Solo mostrar Stack si hay suscripciones */}
+          {subscriptions.length > 0 && (
+            <>
+              <CommandSeparator />
+              <CommandGroup heading="Your Stack">
+                {subscriptions.slice(0, 7).map((sub) => (
+                  <CommandItem
+                    key={sub.id}
+                    onSelect={() => run(() => openModal(sub))}
+                    className="cursor-pointer"
+                  >
+                    <CreditCard className="mr-2 h-4 w-4 text-muted-foreground" />
+                    <span>{sub.name}</span>
+                    <span className="ml-auto text-xs text-muted-foreground">
+                      {sub.category}
+                    </span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </>
+          )}
+
           <CommandSeparator />
+
+          {!isNotifEnabled && (
+            <>
+              <CommandGroup heading="System">
+                <CommandItem
+                  onSelect={() =>
+                    run(async () => {
+                      const granted = await requestNotificationPermission();
+                      if (granted) {
+                        sendNotification(
+                          "Notifications Active",
+                          "You will now receive alerts for upcoming payments.",
+                        );
+                      }
+                    })
+                  }
+                >
+                  <Bell className="mr-2 h-4 w-4" />
+                  <span>Enable Notifications</span>
+                </CommandItem>
+              </CommandGroup>
+              <CommandSeparator />
+            </>
+          )}
 
           <CommandGroup heading="Theme">
             <CommandItem onSelect={() => run(() => setTheme("light"))}>

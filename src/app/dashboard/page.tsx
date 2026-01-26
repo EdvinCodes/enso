@@ -5,6 +5,7 @@ import { useSubscriptionStore } from "@/features/subscriptions/store/subscriptio
 import { SubscriptionModal } from "@/features/subscriptions/components/SubscriptionModal";
 import { SubscriptionCard } from "@/features/subscriptions/components/SubscriptionCard";
 import { CategoryDistribution } from "@/features/subscriptions/components/CategoryDistribution";
+import { SettingsView } from "@/features/settings/SettingsView";
 import { BackgroundGlow } from "@/components/ui/background-glow";
 import { EnsoLogo } from "@/components/ui/enso-logo";
 import { Card } from "@/components/ui/card";
@@ -16,6 +17,7 @@ import {
   Calendar as CalendarIcon,
   Plus,
   BellRing,
+  Settings,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { convertToEur, formatCurrency } from "@/lib/currency";
@@ -141,7 +143,9 @@ export default function DashboardPage() {
         {/* TABS (Controladas por Store) */}
         <Tabs
           value={currentView}
-          onValueChange={(v) => setView(v as "overview" | "calendar")}
+          onValueChange={(v) =>
+            setView(v as "overview" | "calendar" | "settings")
+          }
           className="space-y-8"
         >
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-border pb-4 gap-4">
@@ -153,6 +157,10 @@ export default function DashboardPage() {
               <TabsTrigger value="calendar" className="gap-2">
                 <CalendarIcon className="w-4 h-4" />
                 Calendar
+              </TabsTrigger>
+              <TabsTrigger value="settings" className="gap-2">
+                <Settings className="w-4 h-4" />
+                Settings
               </TabsTrigger>
             </TabsList>
 
@@ -262,6 +270,10 @@ export default function DashboardPage() {
             ) : (
               <CalendarView subscriptions={subscriptions} />
             )}
+          </TabsContent>
+
+          <TabsContent value="settings" className="min-h-[600px]">
+            <SettingsView />
           </TabsContent>
         </Tabs>
       </div>

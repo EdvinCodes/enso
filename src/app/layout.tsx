@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// 1. Viewport Config (Importante para móviles)
+// 1. Viewport Config
 export const viewport: Viewport = {
-  themeColor: "#09090b", // Coincide con tu bg-zinc-950
+  themeColor: "#09090b",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -36,31 +36,29 @@ export const metadata: Metadata = {
     "Privacy First",
     "Local Database",
   ],
-  authors: [{ name: "EdvinCodes" }], // Tu nombre aquí
+  authors: [{ name: "EdvinCodes" }],
   creator: "EdvinCodes",
 
-  // Open Graph (Para compartir en redes)
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://enso.vercel.app", // Tu futura URL
+    url: "https://enso.vercel.app",
     title: "ENSO | Control Your Recurring Expenses",
     description:
       "Privacy-first subscription tracker. No bank connection required.",
     siteName: "ENSO",
   },
 
-  // Twitter Card
   twitter: {
     card: "summary_large_image",
     title: "ENSO | Subscription Intelligence",
     description:
       "Privacy-first subscription tracker. No bank connection required.",
-    creator: "@edvincodes", // Tu usuario si tienes
+    creator: "@edvincodes",
   },
 
   icons: {
-    icon: "/icon", // Apunta al archivo icon.tsx que creamos
+    icon: "/icon",
   },
 };
 
@@ -70,14 +68,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    // Forzamos modo oscuro para mantener la estética 'Midnight Glass'
     <html lang="en" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground selection:bg-primary/20 transition-colors duration-300`}
       >
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
+          defaultTheme="dark"
           enableSystem
           disableTransitionOnChange
         >
