@@ -3,6 +3,8 @@
 import { useState, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+// FIX: Asegúrate de que este componente existe y está exportado en su archivo
+import { CsvImporter } from "./components/CsvImporter";
 import {
   Download,
   Upload,
@@ -10,10 +12,11 @@ import {
   ShieldAlert,
   FileJson,
   CheckCircle2,
+  FileSpreadsheet,
 } from "lucide-react";
 import { exportData, importData, clearAllData } from "@/lib/data";
 import { useSubscriptionStore } from "../subscriptions/store/subscription.store";
-import { BudgetsManager } from "./BudgetsManager"; // <--- IMPORTAR
+import { BudgetsManager } from "./BudgetsManager";
 
 export function SettingsView() {
   const { fetchSubscriptions } = useSubscriptionStore();
@@ -70,52 +73,76 @@ export function SettingsView() {
       </div>
 
       <div className="grid gap-6">
-        {/* 1. SMART BUDGETS (Nuevo) */}
+        {/* 1. SMART BUDGETS */}
         <BudgetsManager />
 
-        {/* 2. DATA PORTABILITY */}
+        {/* 2. DATA PORTABILITY & IMPORT */}
         <Card className="p-6 bg-card/40 border-border backdrop-blur-md">
-          <div className="flex items-start gap-4">
+          <div className="flex items-start gap-4 mb-6">
             <div className="p-3 bg-blue-500/10 rounded-xl text-blue-500">
               <FileJson className="w-6 h-6" />
             </div>
             <div className="space-y-1 flex-1">
               <h3 className="text-lg font-semibold text-foreground">
-                Data Portability
+                Data Management
               </h3>
               <p className="text-sm text-muted-foreground">
-                Your data belongs to you. Export it to JSON for backup.
+                Import from banks or backup your data.
               </p>
             </div>
           </div>
-          <div className="mt-6 flex flex-col sm:flex-row gap-4">
-            <Button
-              variant="outline"
-              onClick={handleExport}
-              className="flex-1 gap-2 border-border/50"
-            >
-              <Download className="w-4 h-4" /> Export Backup
-            </Button>
-            <div className="flex-1">
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                className="hidden"
-                accept=".json"
-              />
+
+          <div className="space-y-6">
+            {/* NUEVA SECCIÓN: SMART IMPORT */}
+            <div className="bg-muted/20 border border-border rounded-lg p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-500/10 rounded-lg text-emerald-500 hidden sm:block">
+                  <FileSpreadsheet className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-medium text-sm text-foreground">
+                    Bank Statement Import
+                  </h4>
+                  <p className="text-xs text-muted-foreground">
+                    Auto-detect subscriptions from CSV.
+                  </p>
+                </div>
+              </div>
+              <CsvImporter />
+            </div>
+
+            <div className="h-px bg-border/50 w-full" />
+
+            {/* SECCIÓN: BACKUP JSON (EXISTENTE) */}
+            <div className="flex flex-col sm:flex-row gap-4">
               <Button
                 variant="outline"
-                onClick={handleImportClick}
-                className="w-full gap-2 border-border/50"
+                onClick={handleExport}
+                className="flex-1 gap-2 border-border/50"
               >
-                {importStatus === "success" ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                ) : (
-                  <Upload className="w-4 h-4" />
-                )}
-                Import Backup
+                <Download className="w-4 h-4" /> Export Backup
               </Button>
+              <div className="flex-1">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  className="hidden"
+                  accept=".json"
+                />
+                <Button
+                  variant="outline"
+                  onClick={handleImportClick}
+                  className="w-full gap-2 border-border/50"
+                >
+                  {importStatus === "success" ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                  ) : (
+                    <Upload className="w-4 h-4" />
+                  )}
+                  Import Backup
+                </Button>
+              </div>
             </div>
           </div>
         </Card>
