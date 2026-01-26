@@ -10,12 +10,13 @@ import {
   ArrowRight,
   ShieldCheck,
   Globe,
-  Calendar,
+  TrendingUp, // <--- Nuevo icono para Forecast
   BellRing,
   Sparkles,
   Github,
   CheckCircle2,
   Zap,
+  Smartphone, // <--- Nuevo icono para PWA
 } from "lucide-react";
 import { motion, useMotionTemplate, useMotionValue } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -82,7 +83,6 @@ const BRANDS = [
 function InfiniteMarquee() {
   return (
     <div className="w-full inline-flex flex-nowrap overflow-hidden [mask-image:_linear-gradient(to_right,transparent_0,_black_128px,_black_calc(100%-128px),transparent_100%)]">
-      {/* Usamos la clase CSS que definimos en globals.css */}
       <ul className="flex items-center justify-center md:justify-start [&_li]:mx-8 [&_img]:max-w-none animate-infinite-scroll">
         {[...BRANDS, ...BRANDS].map((brand, i) => (
           <li
@@ -168,9 +168,11 @@ export default function LandingPage() {
             >
               <Sparkles className="w-3 h-3 text-amber-400" />
               <span className="bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent font-bold">
-                v2.0
+                v2.4
               </span>
-              <span className="text-muted-foreground">Is finally here</span>
+              <span className="text-muted-foreground">
+                Now with Forecast & PWA
+              </span>
             </motion.div>
 
             {/* Title */}
@@ -231,15 +233,15 @@ export default function LandingPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.8, duration: 1 }}
-              className="pt-10 flex items-center justify-center gap-6 text-sm text-muted-foreground/60"
+              className="pt-10 flex flex-col sm:flex-row items-center justify-center gap-6 text-sm text-muted-foreground/60"
             >
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Free
                 Forever
               </div>
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Local
-                Storage
+                <CheckCircle2 className="w-4 h-4 text-emerald-500" /> 100%
+                Offline Capable
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Open
@@ -276,14 +278,23 @@ export default function LandingPage() {
 
               {/* Real UI Content */}
               <div className="relative aspect-[16/10] bg-background w-full overflow-hidden rounded-b-lg group-hover:scale-[1.02] transition-transform duration-500">
-                {/* Asegúrate de poner la foto en la carpeta public */}
-                <Image
-                  src="/dashboard-screenshot.png"
-                  alt="App Screenshot"
-                  width={1600}
-                  height={1000}
-                  className="w-full h-full object-cover"
-                />
+                {/* Asegúrate de tener esta imagen en public/dashboard-screenshot.png */}
+                {/* Si no la tienes, esto mostrará un placeholder gris elegante */}
+                <div className="w-full h-full bg-zinc-900 flex items-center justify-center text-zinc-800">
+                  <Image
+                    src="/dashboard-screenshot.png"
+                    alt="App Screenshot"
+                    width={1600}
+                    height={1000}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                    }}
+                  />
+                  <span className="absolute text-4xl font-bold opacity-10">
+                    DASHBOARD PREVIEW
+                  </span>
+                </div>
               </div>
             </div>
           </motion.div>
@@ -312,21 +323,25 @@ export default function LandingPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 auto-rows-[300px]">
-            {/* Feature 1 */}
+            {/* Feature 1: Local First & PWA */}
             <SpotlightCard className="col-span-1 md:col-span-2">
               <div className="p-8 h-full flex flex-col justify-between relative z-10">
                 <div className="space-y-2">
-                  <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center mb-4 border border-emerald-500/20">
-                    <ShieldCheck className="w-5 h-5 text-emerald-500" />
+                  <div className="flex gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center mb-4 border border-emerald-500/20">
+                      <ShieldCheck className="w-5 h-5 text-emerald-500" />
+                    </div>
+                    <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center mb-4 border border-blue-500/20">
+                      <Smartphone className="w-5 h-5 text-blue-500" />
+                    </div>
                   </div>
                   <h3 className="text-2xl font-bold text-foreground">
-                    Local-First Architecture
+                    Local-First & Offline Ready
                   </h3>
-                  {/* FIX ESLINT: &apos; */}
                   <p className="text-muted-foreground text-lg">
-                    Your data lives in your browser&apos;s IndexedDB. We
-                    literally cannot see your finances even if we wanted to. No
-                    login required.
+                    Your data lives in your browser&apos;s IndexedDB. No login
+                    required. Plus, install ENSO as a native PWA on iOS or
+                    Android and access your finances even without internet.
                   </p>
                 </div>
                 <div className="absolute right-0 bottom-0 opacity-10">
@@ -335,7 +350,7 @@ export default function LandingPage() {
               </div>
             </SpotlightCard>
 
-            {/* Feature 2 */}
+            {/* Feature 2: Multi Currency */}
             <SpotlightCard className="col-span-1">
               <div className="p-8 h-full flex flex-col relative z-10">
                 <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center mb-4 border border-blue-500/20">
@@ -362,21 +377,21 @@ export default function LandingPage() {
               </div>
             </SpotlightCard>
 
-            {/* Feature 3 */}
+            {/* Feature 3: Forecast (UPDATED) */}
             <SpotlightCard className="col-span-1">
               <div className="p-8 h-full flex flex-col relative z-10">
                 <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center mb-4 border border-purple-500/20">
-                  <Calendar className="w-5 h-5 text-purple-500" />
+                  <TrendingUp className="w-5 h-5 text-purple-500" />
                 </div>
-                <h3 className="text-xl font-bold mb-2">Visual Calendar</h3>
+                <h3 className="text-xl font-bold mb-2">Cashflow Forecast</h3>
                 <p className="text-muted-foreground">
-                  See your month at a glance. Identify spending clusters and
-                  annual renewal traps instantly.
+                  Stop guessing. Our new predictive engine visualizes your
+                  cumulative spending curve for the next 30 days.
                 </p>
               </div>
             </SpotlightCard>
 
-            {/* Feature 4 */}
+            {/* Feature 4: Notifications */}
             <SpotlightCard className="col-span-1 md:col-span-2">
               <div className="p-8 h-full flex flex-col sm:flex-row gap-8 relative z-10">
                 <div className="flex-1 space-y-2">
@@ -428,7 +443,6 @@ export default function LandingPage() {
                   <Zap className="w-5 h-5 text-yellow-500 fill-yellow-500" />{" "}
                   God Mode Included
                 </h3>
-                {/* FIX ESLINT: &apos; */}
                 <p className="text-muted-foreground max-w-2xl">
                   Power users don&apos;t touch the mouse. Use the Command
                   Palette to navigate, search, creating subscriptions, or toggle
