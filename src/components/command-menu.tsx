@@ -11,6 +11,8 @@ import {
   Laptop,
   Bell,
   Settings,
+  User,
+  Briefcase,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 
@@ -33,7 +35,8 @@ import {
 export function CommandMenu() {
   const [open, setOpen] = React.useState(false);
   const { setTheme } = useTheme();
-  const { setView, openModal, subscriptions } = useSubscriptionStore();
+  const { setView, openModal, subscriptions, setWorkspace } =
+    useSubscriptionStore();
 
   const [isNotifEnabled, setIsNotifEnabled] = React.useState(false);
 
@@ -139,6 +142,17 @@ export function CommandMenu() {
               <CommandSeparator />
             </>
           )}
+
+          <CommandGroup heading="Workspace">
+            <CommandItem onSelect={() => run(() => setWorkspace("personal"))}>
+              <User className="mr-2 h-4 w-4" />
+              <span>Switch to Personal</span>
+            </CommandItem>
+            <CommandItem onSelect={() => run(() => setWorkspace("business"))}>
+              <Briefcase className="mr-2 h-4 w-4" />
+              <span>Switch to Business</span>
+            </CommandItem>
+          </CommandGroup>
 
           <CommandGroup heading="Theme">
             <CommandItem onSelect={() => run(() => setTheme("light"))}>

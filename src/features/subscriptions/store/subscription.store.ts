@@ -1,32 +1,30 @@
 import { create } from "zustand";
 import { db } from "@/lib/db";
-import { Subscription } from "@/types";
-
-// Definimos el tipo de datos que viene del formulario (sin IDs ni fechas de sistema)
-type NewSubscriptionData = Omit<
-  Subscription,
-  "id" | "active" | "createdAt" | "updatedAt" | "nextPaymentDate"
->;
+import { Subscription, WorkspaceType } from "@/types";
 
 interface SubscriptionState {
   subscriptions: Subscription[];
   isLoading: boolean;
 
-  // UI GLOBAL STATE
   currentView: "overview" | "calendar" | "settings";
+
+  currentWorkspace: WorkspaceType;
+
   isModalOpen: boolean;
   subscriptionToEdit: Subscription | undefined;
 
-  // ACTIONS
   setView: (view: "overview" | "calendar" | "settings") => void;
+  setWorkspace: (workspace: WorkspaceType) => void;
+
   openModal: (subscription?: Subscription) => void;
   closeModal: () => void;
-
   fetchSubscriptions: () => Promise<void>;
-
-  // FIX: Ahora aceptamos NewSubscriptionData en lugar de Omit<Subscription, 'id'>
-  addSubscription: (subscription: NewSubscriptionData) => Promise<void>;
-
+  addSubscription: (
+    subscription: Omit<
+      Subscription,
+      "id" | "active" | "createdAt" | "updatedAt" | "nextPaymentDate"
+    >,
+  ) => Promise<void>;
   deleteSubscription: (id: string) => Promise<void>;
   updateSubscription: (
     id: string,
@@ -37,20 +35,21 @@ interface SubscriptionState {
 export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
   subscriptions: [],
   isLoading: true,
-
-  // UI Initial State
   currentView: "overview",
+
+  currentWorkspace: "personal",
+
   isModalOpen: false,
   subscriptionToEdit: undefined,
 
   setView: (view) => set({ currentView: view }),
+  setWorkspace: (workspace) => set({ currentWorkspace: workspace }),
 
   openModal: (subscription) =>
     set({
       isModalOpen: true,
       subscriptionToEdit: subscription,
     }),
-
   closeModal: () =>
     set({
       isModalOpen: false,
@@ -70,33 +69,27 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
       set({ isLoading: false });
     }
   },
-
-  // FIX: Lógica de creación enriquecida
   addSubscription: async (formData) => {
     const id = crypto.randomUUID();
+    const currentWorkspace = get().currentWorkspace;
 
-    // Creamos el objeto completo para la DB
     const newSub: Subscription = {
       ...formData,
       id,
-      active: true, // Por defecto activa
+      active: true,
+      workspace: formData.workspace || currentWorkspace,
       createdAt: new Date(),
       updatedAt: new Date(),
-      // Inicialmente, la próxima fecha de pago es la fecha de inicio
-      // (Si es en el pasado, la lógica de visualización del calendario lo maneja,
-      // o podríamos calcular la siguiente real aquí, pero esto basta para empezar)
       nextPaymentDate: formData.startDate,
     };
 
     await db.subscriptions.add(newSub);
     await get().fetchSubscriptions();
   },
-
   deleteSubscription: async (id) => {
     await db.subscriptions.delete(id);
     await get().fetchSubscriptions();
   },
-
   updateSubscription: async (id, data) => {
     await db.subscriptions.update(id, {
       ...data,

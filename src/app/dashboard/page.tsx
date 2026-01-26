@@ -6,6 +6,7 @@ import { SubscriptionModal } from "@/features/subscriptions/components/Subscript
 import { SubscriptionCard } from "@/features/subscriptions/components/SubscriptionCard";
 import { CategoryDistribution } from "@/features/subscriptions/components/CategoryDistribution";
 import { SettingsView } from "@/features/settings/SettingsView";
+import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { BackgroundGlow } from "@/components/ui/background-glow";
 import { EnsoLogo } from "@/components/ui/enso-logo";
 import { Card } from "@/components/ui/card";
@@ -34,6 +35,7 @@ import {
 export default function DashboardPage() {
   const {
     subscriptions,
+    currentWorkspace,
     fetchSubscriptions,
     deleteSubscription,
     isLoading,
@@ -81,7 +83,16 @@ export default function DashboardPage() {
     fetchSubscriptions();
   }, [fetchSubscriptions]);
 
-  const monthlyTotal = subscriptions.reduce((acc, sub) => {
+  // ------------------------------------------------------------------
+  // LOGICA DE FILTRADO (EL CEREBRO DEL WORKSPACE)
+  // ------------------------------------------------------------------
+  const filteredSubscriptions = subscriptions.filter((sub) => {
+    // Si la sub no tiene workspace (datos antiguos), asumimos que es 'personal'
+    const subWorkspace = sub.workspace || "personal";
+    return subWorkspace === currentWorkspace;
+  });
+
+  const monthlyTotal = filteredSubscriptions.reduce((acc, sub) => {
     let priceInEur = convertToEur(sub.price, sub.currency);
     if (sub.billingCycle === "yearly") priceInEur = priceInEur / 12;
     if (sub.billingCycle === "weekly") priceInEur = priceInEur * 4;
@@ -125,6 +136,8 @@ export default function DashboardPage() {
                 <BellRing className="w-4 h-4" />
               </Button>
             )}
+
+            <WorkspaceSwitcher />
 
             <CommandMenu />
             <ThemeToggle />
@@ -209,7 +222,9 @@ export default function DashboardPage() {
                   {isLoading ? (
                     <Skeleton className="h-[300px] w-full rounded-xl bg-muted" />
                   ) : (
-                    <CategoryDistribution subscriptions={subscriptions} />
+                    <CategoryDistribution
+                      subscriptions={filteredSubscriptions}
+                    />
                   )}
                 </div>
               </div>
@@ -221,7 +236,7 @@ export default function DashboardPage() {
                     Active Services
                   </h3>
                   <span className="text-xs font-mono text-muted-foreground border border-border px-2 py-1 rounded-md">
-                    {isLoading ? "..." : subscriptions.length} ITEMS
+                    {isLoading ? "..." : filteredSubscriptions.length} ITEMS
                   </span>
                 </div>
 
@@ -233,7 +248,7 @@ export default function DashboardPage() {
                         className="h-28 w-full rounded-xl bg-muted"
                       />
                     ))
-                  ) : subscriptions.length === 0 ? (
+                  ) : filteredSubscriptions.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-20 border border-dashed border-border rounded-2xl bg-muted/20">
                       <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center mb-4">
                         <EnsoLogo className="w-8 h-8 text-muted-foreground opacity-50" />
@@ -250,7 +265,7 @@ export default function DashboardPage() {
                       </p>
                     </div>
                   ) : (
-                    subscriptions.map((sub) => (
+                    filteredSubscriptions.map((sub) => (
                       <SubscriptionCard
                         key={sub.id}
                         subscription={sub}
@@ -268,7 +283,7 @@ export default function DashboardPage() {
             {isLoading ? (
               <Skeleton className="w-full h-[600px] bg-muted rounded-xl" />
             ) : (
-              <CalendarView subscriptions={subscriptions} />
+              <CalendarView subscriptions={filteredSubscriptions} />
             )}
           </TabsContent>
 

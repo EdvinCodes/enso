@@ -1,6 +1,14 @@
-export type Currency = 'EUR' | 'USD' | 'GBP';
-export type BillingCycle = 'monthly' | 'yearly' | 'weekly';
-export type SubscriptionCategory = 'Entertainment' | 'Software' | 'Utilities' | 'Health' | 'Other';
+export type Currency = "EUR" | "USD" | "GBP";
+export type BillingCycle = "monthly" | "yearly" | "weekly";
+export type SubscriptionCategory =
+  | "Entertainment"
+  | "Software"
+  | "Utilities"
+  | "Health"
+  | "Other";
+
+// AÑADIMOS EL TIPO WORKSPACE
+export type WorkspaceType = "personal" | "business";
 
 export interface Subscription {
   id: string;
@@ -8,12 +16,11 @@ export interface Subscription {
   price: number;
   currency: Currency;
   billingCycle: BillingCycle;
+  category: SubscriptionCategory;
   startDate: Date;
   nextPaymentDate: Date;
-  category: SubscriptionCategory;
   active: boolean;
-  
-  // Auditoría (Clave para proyectos serios)
-  createdAt: Date;
-  updatedAt: Date;
+  workspace?: WorkspaceType; // Opcional para soportar datos antiguos
+  createdAt?: Date;
+  updatedAt?: Date;
 }

@@ -7,8 +7,15 @@ export const subscriptionFormSchema = z.object({
   price: z.number().min(0.01, "Price must be positive"),
   currency: z.enum(["EUR", "USD", "GBP"]),
   billingCycle: z.enum(["monthly", "yearly", "weekly"]),
-  category: z.enum(["Entertainment", "Software", "Utilities", "Health", "Other"]),
+  category: z.enum([
+    "Entertainment",
+    "Software",
+    "Utilities",
+    "Health",
+    "Other",
+  ]),
   startDate: z.date(), // Sin configs extra
+  workspace: z.enum(["personal", "business"]).optional(),
 });
 
 export type SubscriptionFormValues = z.infer<typeof subscriptionFormSchema>;

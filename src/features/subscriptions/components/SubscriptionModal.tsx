@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
-import { CalendarIcon, Loader2 } from "lucide-react";
+import { CalendarIcon, Loader2, Briefcase, User } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +31,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+// 1. IMPORTAR RADIO GROUP (Lo acabas de instalar)
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+
 import {
   Popover,
   PopoverContent,
@@ -52,8 +55,7 @@ interface Props {
 }
 
 export function SubscriptionModal({ trigger }: Props) {
-  // 1. CONEXIÓN AL STORE GLOBAL
-  // Ya no usamos estado local 'open'. Todo viene del cerebro central.
+  // 2. EXTRAER CURRENT WORKSPACE DEL STORE
   const {
     isModalOpen,
     closeModal,
@@ -61,6 +63,7 @@ export function SubscriptionModal({ trigger }: Props) {
     subscriptionToEdit,
     addSubscription,
     updateSubscription,
+    currentWorkspace, // <--- AQUÍ ESTÁ
   } = useSubscriptionStore();
 
   const isEditMode = !!subscriptionToEdit;
@@ -74,15 +77,15 @@ export function SubscriptionModal({ trigger }: Props) {
       billingCycle: "monthly",
       category: "Entertainment",
       startDate: new Date(),
+      workspace: currentWorkspace, // Valor por defecto: el espacio donde estés
     },
   });
 
-  // 2. EFECTO DE RELLENADO DE DATOS
-  // Escucha cambios en el store. Si se abre el modal y hay datos, los carga.
+  // 3. ACTUALIZAR EFECTO DE CARGA DE DATOS
   useEffect(() => {
     if (isModalOpen) {
       if (subscriptionToEdit) {
-        // MODO EDICIÓN: Cargar datos existentes
+        // MODO EDICIÓN: Cargar todos los datos + el workspace guardado
         form.reset({
           name: subscriptionToEdit.name,
           price: subscriptionToEdit.price,
@@ -90,9 +93,10 @@ export function SubscriptionModal({ trigger }: Props) {
           billingCycle: subscriptionToEdit.billingCycle,
           category: subscriptionToEdit.category,
           startDate: new Date(subscriptionToEdit.startDate),
+          workspace: subscriptionToEdit.workspace || "personal", // Fallback a personal si es antiguo
         });
       } else {
-        // MODO CREACIÓN: Limpiar formulario
+        // MODO CREACIÓN: Usar el workspace actual
         form.reset({
           name: "",
           price: 0,
@@ -100,10 +104,11 @@ export function SubscriptionModal({ trigger }: Props) {
           billingCycle: "monthly",
           category: "Entertainment",
           startDate: new Date(),
+          workspace: currentWorkspace, // <--- Importante
         });
       }
     }
-  }, [isModalOpen, subscriptionToEdit, form]);
+  }, [isModalOpen, subscriptionToEdit, form, currentWorkspace]);
 
   const isLoading = form.formState.isSubmitting;
 
@@ -114,7 +119,7 @@ export function SubscriptionModal({ trigger }: Props) {
       } else {
         await addSubscription(data);
       }
-      closeModal(); // Cerramos vía store
+      closeModal();
       form.reset();
     } catch (error) {
       console.error("Operation failed", error);
@@ -128,7 +133,6 @@ export function SubscriptionModal({ trigger }: Props) {
     form.setValue("category", preset.category as SubscriptionCategory);
   };
 
-  // Manejador para cerrar el modal correctamente
   const handleOpenChange = (isOpen: boolean) => {
     if (!isOpen) {
       closeModal();
@@ -137,7 +141,6 @@ export function SubscriptionModal({ trigger }: Props) {
 
   return (
     <Dialog open={isModalOpen} onOpenChange={handleOpenChange}>
-      {/* Si pasamos un botón (trigger), lo renderizamos y lo conectamos al store */}
       {trigger && (
         <DialogTrigger asChild onClick={() => openModal()}>
           {trigger}
@@ -346,12 +349,45 @@ export function SubscriptionModal({ trigger }: Props) {
               )}
             />
 
+            {/* 4. CAMPO DE WORKSPACE CON RADIO GROUP */}
+            <FormField
+              control={form.control}
+              name="workspace"
+              render={({ field }) => (
+                <FormItem className="space-y-3 pt-2">
+                  <FormLabel>Assign Workspace</FormLabel>
+                  <FormControl>
+                    <RadioGroup
+                      onValueChange={field.onChange}
+                      // Aseguramos que siempre tenga un valor (personal por defecto si falla)
+                      defaultValue={field.value || currentWorkspace}
+                      className="flex gap-4"
+                    >
+                      <FormItem className="flex items-center space-x-3 space-y-0">
+                        <FormControl>
+                          <RadioGroupItem value="personal" />
+                        </FormControl>
+                        <FormLabel className="font-normal flex items-center gap-2 cursor-pointer">
+                          <User className="w-4 h-4" /> Personal
+                        </FormLabel>
+                      </FormItem>
+                      <FormItem className="flex items-center space-x-3 space-y-0">
+                        <FormControl>
+                          <RadioGroupItem value="business" />
+                        </FormControl>
+                        <FormLabel className="font-normal flex items-center gap-2 cursor-pointer">
+                          <Briefcase className="w-4 h-4" /> Business
+                        </FormLabel>
+                      </FormItem>
+                    </RadioGroup>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <div className="flex justify-end space-x-2 pt-4">
-              <Button
-                variant="ghost"
-                type="button"
-                onClick={closeModal} // Usamos la acción del store
-              >
+              <Button variant="ghost" type="button" onClick={closeModal}>
                 Cancel
               </Button>
               <Button
