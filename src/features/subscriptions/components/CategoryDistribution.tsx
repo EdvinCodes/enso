@@ -44,7 +44,6 @@ export function CategoryDistribution({ subscriptions }: Props) {
   const topCategoryName = data[0]?.name || "";
 
   return (
-    // FIX: bg-card en vez de bg-zinc-900
     <Card className="p-6 bg-card/40 border-border backdrop-blur-md flex flex-col items-center justify-center min-h-[300px] shadow-sm">
       <h3 className="text-sm font-medium text-muted-foreground self-start mb-4">
         Spend by Category
@@ -57,7 +56,6 @@ export function CategoryDistribution({ subscriptions }: Props) {
               Top Spend
             </span>
 
-            {/* FIX: text-foreground para que se vea negro en light mode */}
             <span
               className="font-bold text-foreground block truncate w-full text-center text-base"
               title={topCategoryName}
@@ -138,7 +136,6 @@ export function CategoryDistribution({ subscriptions }: Props) {
                 className={`w-2 h-2 rounded-full shrink-0 transition-all duration-300 ${activeIndex === index ? "scale-150 ring-2 ring-foreground/20" : ""}`}
                 style={{ backgroundColor: COLORS[index % COLORS.length] }}
               />
-              {/* FIX: Texto dinámico */}
               <span
                 className={`transition-colors truncate ${activeIndex === index ? "text-foreground font-medium" : "text-muted-foreground"}`}
               >

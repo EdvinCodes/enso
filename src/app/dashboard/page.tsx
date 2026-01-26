@@ -32,8 +32,9 @@ import {
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { SettingsView } from "@/features/settings/SettingsView";
 import { BudgetProgress } from "@/features/subscriptions/components/BudgetProgress";
-import { CashflowChart } from "@/features/dashboard/components/CashflowChart"; // <--- IMPORTAR
+import { CashflowChart } from "@/features/dashboard/components/CashflowChart";
 import { SubscriptionCategory } from "@/types";
+import { toast } from "sonner"; // <--- PREMIUM TOASTS
 
 export default function DashboardPage() {
   const {
@@ -67,9 +68,25 @@ export default function DashboardPage() {
         "Notifications Active 🔔",
         "We'll notify you 3 days before any payment.",
       );
+      // Feedback visual en la UI también
+      toast.success("Notifications enabled", {
+        description: "You will be alerted 3 days before payments.",
+      });
     } else {
       setPermission("denied");
+      toast.error("Permission denied", {
+        description: "Please enable notifications in your browser settings.",
+      });
     }
+  };
+
+  // Wrapper para borrar con estilo
+  const handleDelete = async (id: string) => {
+    toast.promise(deleteSubscription(id), {
+      loading: "Deleting subscription...",
+      success: "Subscription removed",
+      error: "Failed to delete subscription",
+    });
   };
 
   useEffect(() => {
@@ -186,9 +203,9 @@ export default function DashboardPage() {
             value="overview"
             className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500"
           >
-            {/* --- SECCIÓN SUPERIOR: KPI + PROYECCIÓN (NUEVO DISEÑO) --- */}
+            {/* --- SECCIÓN SUPERIOR: KPI + PROYECCIÓN --- */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* 1. KPI CARD (Ocupa 1 columna) */}
+              {/* 1. KPI CARD */}
               <Card className="p-6 bg-card/40 border-border backdrop-blur-md relative overflow-hidden group shadow-sm md:col-span-1 h-full flex flex-col justify-center">
                 {isLoading ? (
                   <div className="space-y-4">
@@ -217,7 +234,7 @@ export default function DashboardPage() {
                 )}
               </Card>
 
-              {/* 2. CASHFLOW FORECAST CHART (Ocupa 2 columnas) */}
+              {/* 2. CASHFLOW FORECAST CHART */}
               <div className="md:col-span-2 h-full min-h-[300px]">
                 {isLoading ? (
                   <Skeleton className="w-full h-full rounded-xl bg-muted" />
@@ -240,7 +257,7 @@ export default function DashboardPage() {
                     />
                   )}
 
-                  {/* SMART BUDGETS (Visible solo si hay presupuestos) */}
+                  {/* SMART BUDGETS */}
                   {activeBudgets.length > 0 && (
                     <Card className="p-5 space-y-4 border-border/50 bg-card/30 backdrop-blur-sm">
                       <div className="flex items-center gap-2 mb-2">
@@ -308,7 +325,7 @@ export default function DashboardPage() {
                       <SubscriptionCard
                         key={sub.id}
                         subscription={sub}
-                        onDelete={deleteSubscription}
+                        onDelete={handleDelete}
                       />
                     ))
                   )}

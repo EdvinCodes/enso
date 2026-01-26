@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Trash2, CalendarClock, Pencil } from "lucide-react";
 import { Subscription } from "@/types";
 import { cn } from "@/lib/utils";
-import { differenceInDays, startOfDay } from "date-fns"; // <--- IMPORTANTE: Nuevos imports
+import { differenceInDays, startOfDay } from "date-fns";
 
 import { getNextPaymentDate } from "@/lib/dates";
 import { useSubscriptionStore } from "../store/subscription.store";
@@ -16,8 +16,11 @@ interface Props {
 export function SubscriptionCard({ subscription, onDelete }: Props) {
   const { openModal } = useSubscriptionStore();
 
-  const nextPayment = getNextPaymentDate(subscription);
+  // Así evitamos el "0 days left" cuando acabas de añadir una suscripción.
+  const nextPayment = getNextPaymentDate(subscription, true);
+
   const daysUntil = differenceInDays(nextPayment, startOfDay(new Date()));
+
   // -------------------------------------
 
   // Colores semánticos
@@ -25,7 +28,7 @@ export function SubscriptionCard({ subscription, onDelete }: Props) {
     daysUntil <= 3
       ? "bg-red-500"
       : daysUntil <= 7
-        ? "bg-amber-500" // Cambiado a Amber para mejor contraste que yellow
+        ? "bg-amber-500"
         : "bg-primary";
 
   const glowColor = daysUntil <= 3 ? "shadow-red-500/20" : "shadow-primary/20";
@@ -74,7 +77,6 @@ export function SubscriptionCard({ subscription, onDelete }: Props) {
             </div>
             <div className="flex items-center justify-end gap-1.5 text-xs text-muted-foreground mt-1">
               <CalendarClock className="w-3 h-3" />
-              {/* Aquí usamos el cálculo nuevo */}
               <span>{daysUntil} days left</span>
             </div>
           </div>
@@ -107,7 +109,7 @@ export function SubscriptionCard({ subscription, onDelete }: Props) {
       <div className="absolute bottom-0 left-0 h-[2px] bg-muted w-full">
         <div
           className={cn("h-full transition-all duration-1000", urgencyColor)}
-          // Ajustamos la barra para que tenga sentido visual (30 días es el estándar visual aprox)
+          // Ajustamos la barra para que tenga sentido visual
           style={{ width: `${Math.max(5, 100 - (daysUntil / 30) * 100)}%` }}
         />
       </div>

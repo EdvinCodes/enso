@@ -18,6 +18,7 @@ import { PRESET_SERVICES } from "@/lib/constants";
 import { formatCurrency } from "@/lib/currency";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { SubscriptionCategory } from "@/types";
+import { toast } from "sonner";
 
 export function CsvImporter() {
   const [isOpen, setIsOpen] = useState(false);
@@ -33,16 +34,30 @@ export function CsvImporter() {
     if (!file) return;
 
     setIsProcessing(true);
+    // 1. Feedback inmediato de carga
+    const toastId = toast.loading("Analyzing bank statement...");
+
     try {
       const results = await parseAndDetect(file);
       setDetectedItems(results);
       // Por defecto seleccionamos todas
       setSelectedIds(new Set(results.map((i) => i.id)));
+
+      // 2. Éxito: Dismiss loading y mostrar resultado
+      toast.dismiss(toastId);
+      toast.success("Analysis complete", {
+        description: `Found ${results.length} potential subscriptions.`,
+      });
     } catch (error) {
       console.error(error);
-      alert("Error parsing CSV");
+      toast.dismiss(toastId);
+      toast.error("Parsing failed", {
+        description: "Please check if the CSV format is valid.",
+      });
     } finally {
       setIsProcessing(false);
+      // Limpiamos el input para permitir resubir el mismo archivo si falló
+      e.target.value = "";
     }
   };
 
@@ -56,25 +71,40 @@ export function CsvImporter() {
   const handleImport = async () => {
     const toImport = detectedItems.filter((item) => selectedIds.has(item.id));
 
-    for (const item of toImport) {
-      // Intentamos encontrar metadatos del preset (color, categoría)
-      const preset = PRESET_SERVICES.find((p) => p.name === item.name);
-
-      await addSubscription({
-        name: item.name,
-        price: item.price,
-        currency: item.currency,
-        startDate: new Date(), // Empieza hoy por defecto
-        billingCycle: "monthly",
-        // FIX: Tipado correcto
-        category: preset ? (preset.category as SubscriptionCategory) : "Other",
-        workspace: "personal",
-      });
+    if (toImport.length === 0) {
+      toast.warning("No items selected");
+      return;
     }
+
+    // 3. Importación con Promise Toast (Premium Feel)
+    toast.promise(
+      async () => {
+        for (const item of toImport) {
+          // Intentamos encontrar metadatos del preset (color, categoría)
+          const preset = PRESET_SERVICES.find((p) => p.name === item.name);
+
+          await addSubscription({
+            name: item.name,
+            price: item.price,
+            currency: item.currency,
+            startDate: new Date(), // Empieza hoy por defecto
+            billingCycle: "monthly",
+            category: preset
+              ? (preset.category as SubscriptionCategory)
+              : "Other",
+            workspace: "personal",
+          });
+        }
+      },
+      {
+        loading: "Importing to your dashboard...",
+        success: `Successfully added ${toImport.length} subscriptions! 🎉`,
+        error: "Something went wrong during import",
+      },
+    );
 
     setIsOpen(false);
     setDetectedItems([]);
-    alert(`Successfully imported ${toImport.length} subscriptions!`);
   };
 
   return (

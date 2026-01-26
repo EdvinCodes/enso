@@ -3,7 +3,6 @@
 import { useState, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-// FIX: Asegúrate de que este componente existe y está exportado en su archivo
 import { CsvImporter } from "./components/CsvImporter";
 import {
   Download,
@@ -17,6 +16,7 @@ import {
 import { exportData, importData, clearAllData } from "@/lib/data";
 import { useSubscriptionStore } from "../subscriptions/store/subscription.store";
 import { BudgetsManager } from "./BudgetsManager";
+import { toast } from "sonner";
 
 export function SettingsView() {
   const { fetchSubscriptions } = useSubscriptionStore();
@@ -27,6 +27,10 @@ export function SettingsView() {
 
   const handleExport = async () => {
     await exportData();
+    toast.success("Backup exported", {
+      description: "Keep this JSON file safe!",
+      icon: <Download className="w-4 h-4" />,
+    });
   };
 
   const handleImportClick = () => {
@@ -37,30 +41,47 @@ export function SettingsView() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    try {
-      const count = await importData(file);
-      await fetchSubscriptions();
-      setImportStatus("success");
-      setTimeout(() => setImportStatus("idle"), 3000);
-      alert(`Successfully imported ${count} subscriptions.`);
-    } catch (error) {
-      console.error(error);
-      setImportStatus("error");
-      alert("Failed to import data. Please check the file format.");
-    } finally {
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
+    // PREMIUM: Feedback de carga real con Promise
+    toast.promise(
+      async () => {
+        const count = await importData(file);
+        await fetchSubscriptions();
+        setImportStatus("success");
+        setTimeout(() => setImportStatus("idle"), 3000);
+        return count;
+      },
+      {
+        loading: "Restoring backup...",
+        success: (count) => `Successfully restored ${count} subscriptions`,
+        error: () => {
+          setImportStatus("error");
+          return "Failed to import. Invalid JSON format.";
+        },
+      },
+    );
+
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleClearData = async () => {
-    if (
-      confirm(
-        "ARE YOU SURE? This will permanently delete all your subscriptions.",
-      )
-    ) {
-      await clearAllData();
-      await fetchSubscriptions();
-    }
+    // PREMIUM: Toast interactivo en lugar de window.confirm
+    toast("Are you absolutely sure?", {
+      description: "This will permanently delete all local data.",
+      action: {
+        label: "Delete Everything",
+        onClick: async () => {
+          await clearAllData();
+          await fetchSubscriptions();
+          toast.success("Factory reset complete", {
+            description: "Your dashboard is now empty.",
+          });
+        },
+      },
+      cancel: {
+        label: "Cancel",
+        onClick: () => {},
+      },
+    });
   };
 
   return (
@@ -113,7 +134,7 @@ export function SettingsView() {
 
             <div className="h-px bg-border/50 w-full" />
 
-            {/* SECCIÓN: BACKUP JSON (EXISTENTE) */}
+            {/* SECCIÓN: BACKUP JSON */}
             <div className="flex flex-col sm:flex-row gap-4">
               <Button
                 variant="outline"

@@ -95,7 +95,6 @@ export function CommandMenu() {
             </CommandItem>
           </CommandGroup>
 
-          {/* FIX: Solo mostrar Stack si hay suscripciones */}
           {subscriptions.length > 0 && (
             <>
               <CommandSeparator />

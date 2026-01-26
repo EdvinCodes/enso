@@ -48,6 +48,7 @@ import {
 } from "@/features/subscriptions/schemas";
 import { PRESET_SERVICES } from "@/lib/constants";
 import { Currency, SubscriptionCategory } from "@/types";
+import { toast } from "sonner";
 
 interface Props {
   trigger?: React.ReactNode;
@@ -79,18 +80,13 @@ export function SubscriptionModal({ trigger }: Props) {
     },
   });
 
-  // --- EFECTO DE SINCRONIZACIÓN ---
   useEffect(() => {
     if (isModalOpen) {
       const editing = !!subscriptionToEdit;
-
-      // FIX: Silenciamos el linter aquí porque necesitamos actualizar el estado local
-      // basándonos en el store global ANTES de que el usuario interactúe.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsEditing(editing);
 
       if (editing && subscriptionToEdit) {
-        // MODO EDICIÓN
         form.reset({
           name: subscriptionToEdit.name,
           price: subscriptionToEdit.price,
@@ -101,7 +97,6 @@ export function SubscriptionModal({ trigger }: Props) {
           workspace: subscriptionToEdit.workspace || "personal",
         });
       } else {
-        // MODO CREACIÓN
         form.reset({
           name: "",
           price: 0,
@@ -119,15 +114,22 @@ export function SubscriptionModal({ trigger }: Props) {
 
   const onSubmit = async (data: SubscriptionFormValues) => {
     try {
-      if (isEditing) {
-        // Usamos el estado sticky
-        // Aseguramos que existe el ID (typescript safety)
-        if (subscriptionToEdit) {
-          await updateSubscription(subscriptionToEdit.id, data);
-        }
-      } else {
-        await addSubscription(data);
-      }
+      const actionPromise =
+        isEditing && subscriptionToEdit
+          ? updateSubscription(subscriptionToEdit.id, data)
+          : addSubscription(data);
+
+      toast.promise(actionPromise, {
+        loading: isEditing
+          ? "Updating subscription..."
+          : "Adding subscription...",
+        success: isEditing
+          ? "Subscription updated successfully"
+          : "Subscription added to your dashboard",
+        error: "Operation failed. Please try again.",
+      });
+
+      await actionPromise;
       closeModal();
     } catch (error) {
       console.error("Operation failed", error);
@@ -139,6 +141,7 @@ export function SubscriptionModal({ trigger }: Props) {
     form.setValue("price", preset.price);
     form.setValue("currency", preset.currency as Currency);
     form.setValue("category", preset.category as SubscriptionCategory);
+    toast.info(`Preset applied: ${preset.name}`, { duration: 1500 });
   };
 
   const handleOpenChange = (isOpen: boolean) => {
@@ -155,12 +158,7 @@ export function SubscriptionModal({ trigger }: Props) {
         </DialogTrigger>
       )}
 
-      {/* FIX RESPONSIVE:
-         - w-full: Ocupa el ancho disponible
-         - max-h-[85vh]: Nunca supera el 85% de la altura de la pantalla (deja espacio arriba y abajo)
-         - overflow-y-auto: Si el contenido es mayor que el 85%, aparece barra de scroll dentro del modal
-      */}
-      <DialogContent className="w-full sm:max-w-[500px] max-h-[90vh] overflow-y-auto bg-background text-foreground border-border">
+      <DialogContent className="w-full sm:max-w-[500px] max-h-[85vh] overflow-y-auto bg-background text-foreground border-border">
         <DialogHeader>
           <DialogTitle className="text-2xl">
             {isEditing ? "Edit Subscription" : "New Subscription"}
@@ -348,7 +346,13 @@ export function SubscriptionModal({ trigger }: Props) {
                       <Calendar
                         mode="single"
                         selected={field.value}
-                        onSelect={field.onChange}
+                        onSelect={(date) => {
+                          // Solo actualizamos si 'date' existe.
+                          // Si deseleccionas, 'date' es undefined, y no hacemos nada.
+                          if (date) {
+                            field.onChange(date);
+                          }
+                        }}
                         disabled={(date) =>
                           date > new Date() || date < new Date("1900-01-01")
                         }

@@ -26,7 +26,6 @@ export function CashflowChart({ subscriptions }: Props) {
   const totalForecast = data[data.length - 1]?.accumulated || 0;
   const isEmpty = subscriptions.length === 0;
 
-  // FIX: Ya no devolvemos 'null'. Siempre mostramos la Card.
   return (
     <Card className="p-6 bg-card/40 border-border backdrop-blur-md overflow-hidden h-full flex flex-col justify-between min-h-[300px]">
       <div className="flex items-start justify-between mb-4">

@@ -15,12 +15,16 @@ interface SubscriptionState {
   currentWorkspace: WorkspaceType;
   isModalOpen: boolean;
   subscriptionToEdit: Subscription | undefined;
-  budgets: Budgets; // <--- NUEVO: Presupuestos
+  budgets: Budgets;
 
   // --- UI ACTIONS ---
   setView: (view: "overview" | "calendar" | "settings") => void;
   setWorkspace: (workspace: WorkspaceType) => void;
-  setCategoryBudget: (category: SubscriptionCategory, limit: number) => void; // <--- NUEVO
+  // FIX: Renombrado a updateBudget y devuelve Promise para el Toast
+  updateBudget: (
+    category: SubscriptionCategory,
+    limit: number,
+  ) => Promise<void>;
   openModal: (subscription?: Subscription) => void;
   closeModal: () => void;
 
@@ -47,7 +51,7 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
   currentWorkspace: "personal",
   isModalOpen: false,
   subscriptionToEdit: undefined,
-  budgets: {}, // Inicialmente vacío
+  budgets: {},
 
   // Setters Simples
   setView: (view) => set({ currentView: view }),
@@ -58,8 +62,11 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
 
   closeModal: () => set({ isModalOpen: false, subscriptionToEdit: undefined }),
 
-  // --- BUDGET LOGIC (Local Storage) ---
-  setCategoryBudget: (category, limit) => {
+  // --- BUDGET LOGIC (Local Storage + UX Delay) ---
+  updateBudget: async (category, limit) => {
+    // 1. Truco UX: Pequeño delay artificial para que se vea el Toast de "Saving..."
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
     set((state) => {
       const newBudgets = { ...state.budgets, [category]: limit };
 
@@ -101,7 +108,6 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
 
   addSubscription: async (formData) => {
     const id = crypto.randomUUID();
-    // Asignar al workspace actual si no viene definido
     const currentWorkspace = get().currentWorkspace;
 
     const newSub: Subscription = {
@@ -127,7 +133,6 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
     await db.subscriptions.update(id, {
       ...data,
       updatedAt: new Date(),
-      // Si cambian la fecha de inicio, recalculamos el nextPayment (opcional, simplificado por ahora)
       ...(data.startDate ? { nextPaymentDate: data.startDate } : {}),
     });
     await get().fetchSubscriptions();
