@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useSubscriptionStore } from "@/features/subscriptions/store/subscription.store";
 import { SubscriptionModal } from "@/features/subscriptions/components/SubscriptionModal";
 import { SubscriptionCard } from "@/features/subscriptions/components/SubscriptionCard";
@@ -17,6 +18,8 @@ import {
   Plus,
   BellRing,
   Settings,
+  Loader2,
+  LogOut,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { convertToEur, formatCurrency, getRate } from "@/lib/currency";
@@ -37,10 +40,14 @@ import { SubscriptionCategory } from "@/types";
 import { toast } from "sonner";
 
 export default function DashboardPage() {
+  const router = useRouter();
+
   const {
+    checkAuth,
+    user,
     subscriptions,
-    fetchSubscriptions,
     deleteSubscription,
+    signOut,
     isLoading,
     currentView,
     setView,
@@ -48,6 +55,19 @@ export default function DashboardPage() {
     currentWorkspace,
     budgets,
   } = useSubscriptionStore();
+
+  // 1. SOLO UN USE EFFECT para inicializar.
+  // checkAuth se encarga de verificar usuario Y cargar datos si existe.
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
+  // 2. Redirección si no hay usuario
+  useEffect(() => {
+    if (!isLoading && !user) {
+      router.push("/login");
+    }
+  }, [isLoading, user, router]);
 
   useSmartNotifications(subscriptions);
 
@@ -68,7 +88,6 @@ export default function DashboardPage() {
         "Notifications Active 🔔",
         "We'll notify you 3 days before any payment.",
       );
-      // Feedback visual en la UI también
       toast.success("Notifications enabled", {
         description: "You will be alerted 3 days before payments.",
       });
@@ -80,7 +99,6 @@ export default function DashboardPage() {
     }
   };
 
-  // Wrapper para borrar con estilo
   const handleDelete = async (id: string) => {
     toast.promise(deleteSubscription(id), {
       loading: "Deleting subscription...",
@@ -89,9 +107,12 @@ export default function DashboardPage() {
     });
   };
 
-  useEffect(() => {
-    fetchSubscriptions();
-  }, [fetchSubscriptions]);
+  // FUNCIÓN PARA CERRAR SESIÓN
+  const handleLogout = async () => {
+    await signOut();
+    router.push("/login");
+    toast.success("Logged out successfully");
+  };
 
   const filteredSubscriptions = subscriptions.filter((sub) => {
     const subWorkspace = sub.workspace || "personal";
@@ -122,6 +143,14 @@ export default function DashboardPage() {
   const activeBudgets = (Object.keys(budgets) as SubscriptionCategory[]).filter(
     (cat) => (budgets[cat] || 0) > 0,
   );
+
+  if (isLoading || !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <main className="relative min-h-screen font-sans bg-background text-foreground transition-colors duration-300 selection:bg-primary/30">
@@ -160,6 +189,18 @@ export default function DashboardPage() {
             <WorkspaceSwitcher />
             <CommandMenu />
             <ThemeToggle />
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleLogout}
+              className="text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
+              title="Sign Out"
+            >
+              <LogOut className="w-4 h-4" />
+            </Button>
+            {/* ----------------------------- */}
+
             <Button
               size="lg"
               className="shadow-lg shadow-primary/20"
@@ -178,6 +219,7 @@ export default function DashboardPage() {
           }
           className="space-y-8"
         >
+          {/* ... resto del código igual ... */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-border pb-4 gap-4">
             <TabsList className="bg-muted/50 border border-border">
               <TabsTrigger value="overview" className="gap-2">
@@ -193,7 +235,6 @@ export default function DashboardPage() {
                 Settings
               </TabsTrigger>
             </TabsList>
-
             <div className="hidden md:flex items-center gap-2 text-xs font-mono text-muted-foreground bg-muted/30 px-2 py-1 rounded border border-border/50">
               <span className="font-bold">⌘ K</span> <span>to search</span>
             </div>
@@ -203,16 +244,10 @@ export default function DashboardPage() {
             value="overview"
             className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500"
           >
-            {/* --- SECCIÓN SUPERIOR: KPI + PROYECCIÓN --- */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* 1. KPI CARD */}
               <Card className="p-6 bg-card/40 border-border backdrop-blur-md relative overflow-hidden group shadow-sm md:col-span-1 h-full flex flex-col justify-center">
                 {isLoading ? (
-                  <div className="space-y-4">
-                    <Skeleton className="h-4 w-24 bg-muted" />
-                    <Skeleton className="h-10 w-48 bg-muted" />
-                    <Skeleton className="h-6 w-32 bg-muted" />
-                  </div>
+                  <Skeleton className="h-20 w-full bg-muted" />
                 ) : (
                   <>
                     <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
@@ -225,15 +260,11 @@ export default function DashboardPage() {
                       <h2 className="text-4xl font-bold text-foreground tracking-tight">
                         {formatCurrency(monthlyTotal)}
                       </h2>
-
                       <div className="flex flex-wrap gap-2 mt-4">
-                        {/* Etiqueta Workspace */}
                         <div className="flex items-center gap-2 text-emerald-500 text-xs bg-emerald-500/10 w-fit px-2 py-1 rounded-full border border-emerald-500/20">
                           <TrendingUp className="w-3 h-3" />
                           <span>{currentWorkspace}</span>
                         </div>
-
-                        {/* NUEVA ETIQUETA: LIVE RATES */}
                         <div
                           className="flex items-center gap-1 text-xs text-blue-500 bg-blue-500/10 px-2 py-1 rounded-full border border-blue-500/20"
                           title={`1 EUR = ${getRate("USD")} USD`}
@@ -247,8 +278,6 @@ export default function DashboardPage() {
                   </>
                 )}
               </Card>
-
-              {/* 2. CASHFLOW FORECAST CHART */}
               <div className="md:col-span-2 h-full min-h-[300px]">
                 {isLoading ? (
                   <Skeleton className="w-full h-full rounded-xl bg-muted" />
@@ -258,11 +287,9 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* --- SECCIÓN INFERIOR: DETALLES --- */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className="space-y-6">
                 <div className="grid gap-4">
-                  {/* CATEGORY DISTRIBUTION */}
                   {isLoading ? (
                     <Skeleton className="h-[300px] w-full rounded-xl bg-muted" />
                   ) : (
@@ -270,8 +297,6 @@ export default function DashboardPage() {
                       subscriptions={filteredSubscriptions}
                     />
                   )}
-
-                  {/* SMART BUDGETS */}
                   {activeBudgets.length > 0 && (
                     <Card className="p-5 space-y-4 border-border/50 bg-card/30 backdrop-blur-sm">
                       <div className="flex items-center gap-2 mb-2">
@@ -283,7 +308,6 @@ export default function DashboardPage() {
                         {activeBudgets.map((cat) => {
                           const limit = budgets[cat] || 0;
                           const current = categoryMonthlyTotals[cat] || 0;
-
                           return (
                             <BudgetProgress
                               key={cat}
@@ -299,7 +323,6 @@ export default function DashboardPage() {
                   )}
                 </div>
               </div>
-
               <div className="lg:col-span-2 space-y-6">
                 <div className="flex items-center justify-between px-1">
                   <h3 className="text-xl font-semibold tracking-tight text-foreground">
@@ -309,7 +332,6 @@ export default function DashboardPage() {
                     {isLoading ? "..." : filteredSubscriptions.length} ITEMS
                   </span>
                 </div>
-
                 <div className="grid gap-3">
                   {isLoading ? (
                     Array.from({ length: 3 }).map((_, i) => (
@@ -320,18 +342,10 @@ export default function DashboardPage() {
                     ))
                   ) : filteredSubscriptions.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-20 border border-dashed border-border rounded-2xl bg-muted/20">
-                      <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center mb-4">
-                        <EnsoLogo className="w-8 h-8 text-muted-foreground opacity-50" />
-                      </div>
+                      {/* Empty state content */}
+                      <EnsoLogo className="w-8 h-8 text-muted-foreground opacity-50 mb-4" />
                       <p className="text-muted-foreground font-medium">
                         No {currentWorkspace} subscriptions yet
-                      </p>
-                      <p className="text-muted-foreground/60 text-sm mt-1">
-                        Press{" "}
-                        <span className="font-mono bg-muted px-1 rounded">
-                          ⌘K
-                        </span>{" "}
-                        or click Add New
                       </p>
                     </div>
                   ) : (
@@ -355,7 +369,6 @@ export default function DashboardPage() {
               <CalendarView subscriptions={filteredSubscriptions} />
             )}
           </TabsContent>
-
           <TabsContent value="settings" className="min-h-[600px]">
             <SettingsView />
           </TabsContent>

@@ -286,6 +286,7 @@ export default function LandingPage() {
                     alt="App Screenshot"
                     width={1600}
                     height={1000}
+                    loading="eager"
                     className="w-full h-full object-cover"
                     onError={(e) => {
                       e.currentTarget.style.display = "none";
