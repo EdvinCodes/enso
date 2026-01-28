@@ -36,8 +36,10 @@ import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { SettingsView } from "@/features/settings/SettingsView";
 import { BudgetProgress } from "@/features/subscriptions/components/BudgetProgress";
 import { CashflowChart } from "@/features/dashboard/components/CashflowChart";
-import { SubscriptionCategory } from "@/types";
+import { Subscription, SubscriptionCategory, Currency } from "@/types"; // <--- Import Currency
 import { toast } from "sonner";
+import { LogPaymentModal } from "@/components/log-payment-modal";
+import { isSameMonth, parseISO } from "date-fns"; // <--- Import necesarios para la fecha
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -54,15 +56,16 @@ export default function DashboardPage() {
     openModal,
     currentWorkspace,
     budgets,
+    payments, // <--- Importante: Traemos los pagos del store
   } = useSubscriptionStore();
 
-  // 1. SOLO UN USE EFFECT para inicializar.
-  // checkAuth se encarga de verificar usuario Y cargar datos si existe.
+  const [isLogPaymentOpen, setIsLogPaymentOpen] = useState(false);
+  const [subToLog, setSubToLog] = useState<Subscription | null>(null);
+
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
 
-  // 2. Redirección si no hay usuario
   useEffect(() => {
     if (!isLoading && !user) {
       router.push("/login");
@@ -107,11 +110,15 @@ export default function DashboardPage() {
     });
   };
 
-  // FUNCIÓN PARA CERRAR SESIÓN
   const handleLogout = async () => {
     await signOut();
     router.push("/login");
     toast.success("Logged out successfully");
+  };
+
+  const handleOpenLogPayment = (sub: Subscription) => {
+    setSubToLog(sub);
+    setIsLogPaymentOpen(true);
   };
 
   const filteredSubscriptions = subscriptions.filter((sub) => {
@@ -119,26 +126,54 @@ export default function DashboardPage() {
     return subWorkspace === currentWorkspace;
   });
 
-  const monthlyTotal = filteredSubscriptions.reduce((acc, sub) => {
-    if (!sub.active) return acc;
-    let priceInEur = convertToEur(sub.price, sub.currency);
-    if (sub.billingCycle === "yearly") priceInEur = priceInEur / 12;
-    if (sub.billingCycle === "weekly") priceInEur = priceInEur * 4;
-    return acc + priceInEur;
-  }, 0);
+  // --- LÓGICA DE CÁLCULO REAL ---
+  // Esta función reemplaza a los antiguos reduce().
+  // Calcula el gasto real usando pagos si existen, o proyecciones si no.
+  const calculateCurrentMonthSpend = () => {
+    const now = new Date();
+    let total = 0;
+    const catTotals: Record<string, number> = {};
 
-  const categoryMonthlyTotals = filteredSubscriptions.reduce(
-    (acc, sub) => {
-      if (!sub.active) return acc;
-      let priceInEur = convertToEur(sub.price, sub.currency);
-      if (sub.billingCycle === "yearly") priceInEur = priceInEur / 12;
-      if (sub.billingCycle === "weekly") priceInEur = priceInEur * 4;
+    filteredSubscriptions.forEach((sub) => {
+      if (!sub.active) return;
 
-      acc[sub.category] = (acc[sub.category] || 0) + priceInEur;
-      return acc;
-    },
-    {} as Record<string, number>,
-  );
+      // 1. ¿Existe un pago real este mes?
+      const realPayment = payments.find(
+        (p) =>
+          p.subscription_id === sub.id &&
+          isSameMonth(parseISO(p.payment_date), now),
+      );
+
+      let amount = 0;
+
+      if (realPayment) {
+        // Usamos el dato REAL
+        if (realPayment.status === "paid") {
+          // FIX: Forzamos el tipo con "as Currency"
+          amount = convertToEur(
+            realPayment.amount,
+            realPayment.currency as Currency,
+          );
+        }
+        // Si es "skipped", amount se queda en 0.
+      } else {
+        // Usamos la PROYECCIÓN (teórico)
+        let price = convertToEur(sub.price, sub.currency);
+        if (sub.billingCycle === "yearly") price /= 12;
+        if (sub.billingCycle === "weekly") price *= 4;
+        amount = price;
+      }
+
+      total += amount;
+      catTotals[sub.category] = (catTotals[sub.category] || 0) + amount;
+    });
+
+    return { total, catTotals };
+  };
+
+  // Ejecutamos la función
+  const { total: monthlyTotal, catTotals: categoryMonthlyTotals } =
+    calculateCurrentMonthSpend();
 
   const activeBudgets = (Object.keys(budgets) as SubscriptionCategory[]).filter(
     (cat) => (budgets[cat] || 0) > 0,
@@ -156,6 +191,12 @@ export default function DashboardPage() {
     <main className="relative min-h-screen font-sans bg-background text-foreground transition-colors duration-300 selection:bg-primary/30">
       <BackgroundGlow />
       <SubscriptionModal />
+
+      <LogPaymentModal
+        isOpen={isLogPaymentOpen}
+        onClose={() => setIsLogPaymentOpen(false)}
+        subscription={subToLog}
+      />
 
       <div className="relative mx-auto max-w-6xl px-6 py-12 md:py-20 space-y-8">
         {/* HEADER */}
@@ -199,7 +240,6 @@ export default function DashboardPage() {
             >
               <LogOut className="w-4 h-4" />
             </Button>
-            {/* ----------------------------- */}
 
             <Button
               size="lg"
@@ -219,7 +259,6 @@ export default function DashboardPage() {
           }
           className="space-y-8"
         >
-          {/* ... resto del código igual ... */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-border pb-4 gap-4">
             <TabsList className="bg-muted/50 border border-border">
               <TabsTrigger value="overview" className="gap-2">
@@ -295,6 +334,7 @@ export default function DashboardPage() {
                   ) : (
                     <CategoryDistribution
                       subscriptions={filteredSubscriptions}
+                      payments={payments} // <--- Pasamos pagos
                     />
                   )}
                   {activeBudgets.length > 0 && (
@@ -342,7 +382,6 @@ export default function DashboardPage() {
                     ))
                   ) : filteredSubscriptions.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-20 border border-dashed border-border rounded-2xl bg-muted/20">
-                      {/* Empty state content */}
                       <EnsoLogo className="w-8 h-8 text-muted-foreground opacity-50 mb-4" />
                       <p className="text-muted-foreground font-medium">
                         No {currentWorkspace} subscriptions yet
@@ -354,6 +393,7 @@ export default function DashboardPage() {
                         key={sub.id}
                         subscription={sub}
                         onDelete={handleDelete}
+                        onLogPayment={handleOpenLogPayment}
                       />
                     ))
                   )}
@@ -366,7 +406,10 @@ export default function DashboardPage() {
             {isLoading ? (
               <Skeleton className="w-full h-[600px] bg-muted rounded-xl" />
             ) : (
-              <CalendarView subscriptions={filteredSubscriptions} />
+              <CalendarView
+                subscriptions={filteredSubscriptions}
+                payments={payments} // <--- Pasamos pagos
+              />
             )}
           </TabsContent>
           <TabsContent value="settings" className="min-h-[600px]">

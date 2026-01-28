@@ -12,13 +12,14 @@ import {
   isSameMonth,
   addMonths,
   subMonths,
+  parseISO,
+  isSameDay,
 } from "date-fns";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Subscription } from "@/types";
+import { Subscription, Payment } from "@/types"; // <--- Importamos Payment
 import { getPaymentsForDay } from "@/lib/calendar-logic";
-import { convertToEur } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import {
   Tooltip,
@@ -29,11 +30,12 @@ import {
 
 interface Props {
   subscriptions: Subscription[];
+  payments: Payment[]; // <--- Recibimos pagos
 }
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-export function CalendarView({ subscriptions }: Props) {
+export function CalendarView({ subscriptions, payments }: Props) {
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const monthStart = startOfMonth(currentDate);
@@ -46,13 +48,6 @@ export function CalendarView({ subscriptions }: Props) {
     end: calendarEnd,
   });
 
-  const monthlySpend = subscriptions.reduce((acc, sub) => {
-    let price = convertToEur(sub.price, sub.currency);
-    if (sub.billingCycle === "weekly") price *= 4;
-    if (sub.billingCycle === "yearly") price /= 12;
-    return acc + price;
-  }, 0);
-
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       {/* Header Responsivo */}
@@ -62,11 +57,7 @@ export function CalendarView({ subscriptions }: Props) {
             {format(currentDate, "MMMM yyyy")}
           </h2>
           <p className="text-muted-foreground text-sm">
-            Total projected:{" "}
-            {new Intl.NumberFormat("es-ES", {
-              style: "currency",
-              currency: "EUR",
-            }).format(monthlySpend)}
+            Overview of payments and projections
           </p>
         </div>
         <div className="flex items-center gap-2 self-end sm:self-auto">
@@ -94,12 +85,10 @@ export function CalendarView({ subscriptions }: Props) {
         </div>
       </div>
 
-      {/* Grid del Calendario con Scroll Horizontal en Móvil */}
+      {/* Grid del Calendario */}
       <Card className="bg-card/50 backdrop-blur-sm overflow-hidden border-border shadow-sm">
         <div className="overflow-x-auto">
           <div className="min-w-[800px]">
-            {" "}
-            {/* Ancho mínimo para forzar estructura en móvil */}
             {/* Cabecera Dias Semana */}
             <div className="grid grid-cols-7 border-b border-border bg-muted/50">
               {WEEKDAYS.map((day) => (
@@ -114,7 +103,14 @@ export function CalendarView({ subscriptions }: Props) {
             {/* Días */}
             <div className="grid grid-cols-7 auto-rows-[120px]">
               {calendarDays.map((day) => {
-                const payments = getPaymentsForDay(subscriptions, day);
+                // 1. Proyecciones (Calculadas)
+                const projectedPayments = getPaymentsForDay(subscriptions, day);
+
+                // 2. Realidad (Logueada)
+                const realPaymentsForDay = payments.filter((p) =>
+                  isSameDay(parseISO(p.payment_date), day),
+                );
+
                 const isCurrentMonth = isSameMonth(day, monthStart);
                 const isTodayDate = isToday(day);
 
@@ -123,11 +119,10 @@ export function CalendarView({ subscriptions }: Props) {
                     key={day.toString()}
                     className={cn(
                       "relative border-b border-r border-border p-2 transition-colors hover:bg-muted/30 flex flex-col gap-1",
-                      !isCurrentMonth && "bg-muted/10 opacity-40", // Fondo sutil para días fuera de mes
+                      !isCurrentMonth && "bg-muted/10 opacity-40",
                       isTodayDate && "bg-primary/5",
                     )}
                   >
-                    {/* Número del día: ARREGLADO EL COLOR */}
                     <span
                       className={cn(
                         "text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full mb-1",
@@ -140,38 +135,73 @@ export function CalendarView({ subscriptions }: Props) {
                       {format(day, "d")}
                     </span>
 
-                    {/* Lista de Pagos */}
                     <div className="flex flex-col gap-1 overflow-y-auto custom-scrollbar pr-1">
-                      {payments.map((sub) => (
-                        <TooltipProvider key={sub.id}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <div className="flex items-center gap-1.5 bg-card border border-border rounded px-2 py-1 cursor-pointer hover:border-primary/50 transition-colors shadow-sm group">
-                                <div
-                                  className="w-1.5 h-1.5 rounded-full shrink-0"
-                                  style={{
-                                    backgroundColor: getCategoryColor(
-                                      sub.category,
-                                    ),
-                                  }}
-                                />
-                                <span className="text-[10px] font-medium text-foreground truncate group-hover:text-primary">
-                                  {sub.name}
-                                </span>
-                              </div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p className="font-bold">{sub.name}</p>
-                              <p className="text-muted-foreground">
-                                {new Intl.NumberFormat("es-ES", {
-                                  style: "currency",
-                                  currency: sub.currency,
-                                }).format(sub.price)}
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      ))}
+                      {/* A. Renderizamos PAGOS REALES primero */}
+                      {realPaymentsForDay.map((p) => {
+                        const sub = subscriptions.find(
+                          (s) => s.id === p.subscription_id,
+                        );
+                        if (!sub) return null; // Si se borró la sub
+
+                        return (
+                          <div
+                            key={p.id}
+                            className={cn(
+                              "flex items-center gap-1.5 border rounded px-2 py-1 shadow-sm",
+                              p.status === "paid"
+                                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400"
+                                : "bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400",
+                            )}
+                          >
+                            {p.status === "paid" ? (
+                              <Check className="w-3 h-3" />
+                            ) : (
+                              <X className="w-3 h-3" />
+                            )}
+                            <span className="text-[10px] font-bold truncate line-through decoration-emerald-500/0">
+                              {sub.name}
+                            </span>
+                            <span className="text-[9px] ml-auto font-mono opacity-80">
+                              {p.amount}€
+                            </span>
+                          </div>
+                        );
+                      })}
+
+                      {/* B. Renderizamos PROYECCIONES (si no hay pago real ese día para esa sub) */}
+                      {projectedPayments.map((sub) => {
+                        // Truco: Si ya hay un pago real para esta suscripción en este mes, quizás no queramos mostrar la proyección para no duplicar.
+                        // Pero por simplicidad en el calendario, mostramos la proyección como "Planificado".
+                        // Si quieres ocultar la proyección si ya se pagó:
+                        // const alreadyPaidThisMonth = payments.some(...)
+
+                        return (
+                          <TooltipProvider key={sub.id + "-proj"}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="flex items-center gap-1.5 bg-card border border-border rounded px-2 py-1 cursor-pointer hover:border-primary/50 transition-colors shadow-sm group opacity-70 border-dashed">
+                                  <div
+                                    className="w-1.5 h-1.5 rounded-full shrink-0"
+                                    style={{
+                                      backgroundColor: getCategoryColor(
+                                        sub.category,
+                                      ),
+                                    }}
+                                  />
+                                  <span className="text-[10px] font-medium text-foreground truncate group-hover:text-primary">
+                                    {sub.name}
+                                  </span>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="font-bold">
+                                  Projected: {sub.name}
+                                </p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        );
+                      })}
                     </div>
                   </div>
                 );

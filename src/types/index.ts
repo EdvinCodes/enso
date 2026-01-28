@@ -24,3 +24,19 @@ export interface Subscription {
   createdAt?: Date;
   updatedAt?: Date;
 }
+
+export interface Payment {
+  id: string;
+  user_id: string;
+  subscription_id: string;
+  amount: number;
+  currency: string;
+  payment_date: string;
+  status: "paid" | "skipped" | "pending";
+  notes?: string;
+  created_at?: string;
+}
+
+export interface SubscriptionWithHistory extends Subscription {
+  history?: Payment[];
+}

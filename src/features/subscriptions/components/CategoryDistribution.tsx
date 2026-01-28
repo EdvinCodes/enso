@@ -3,11 +3,13 @@
 import { useMemo, useState } from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { Card } from "@/components/ui/card";
-import { Subscription } from "@/types";
+import { Subscription, Payment, Currency } from "@/types"; // <--- Importamos Currency
 import { convertToEur } from "@/lib/currency";
+import { isSameMonth, parseISO } from "date-fns";
 
 interface Props {
   subscriptions: Subscription[];
+  payments: Payment[];
 }
 
 const COLORS = [
@@ -19,34 +21,59 @@ const COLORS = [
   "#ec4899", // Pink
 ];
 
-export function CategoryDistribution({ subscriptions }: Props) {
+export function CategoryDistribution({ subscriptions, payments }: Props) {
   const [activeIndex, setActiveIndex] = useState<number | undefined>();
 
   const data = useMemo(() => {
     const map = new Map<string, number>();
+    const now = new Date();
 
     subscriptions.forEach((sub) => {
-      let monthlyPrice = convertToEur(sub.price, sub.currency);
-      if (sub.billingCycle === "yearly") monthlyPrice /= 12;
-      if (sub.billingCycle === "weekly") monthlyPrice *= 4;
+      // 1. Buscamos si hay un pago REAL este mes para esta suscripción
+      const realPayment = payments.find(
+        (p) =>
+          p.subscription_id === sub.id &&
+          isSameMonth(parseISO(p.payment_date), now),
+      );
+
+      let amountInEur = 0;
+
+      if (realPayment) {
+        // CASO A: Ya se pagó este mes
+        if (realPayment.status === "skipped") {
+          amountInEur = 0;
+        } else {
+          // FIX: Forzamos el tipo con "as Currency" para que TypeScript no se queje
+          amountInEur = convertToEur(
+            realPayment.amount,
+            realPayment.currency as Currency,
+          );
+        }
+      } else {
+        // CASO B: Proyección teórica
+        let monthlyPrice = convertToEur(sub.price, sub.currency);
+        if (sub.billingCycle === "yearly") monthlyPrice /= 12;
+        if (sub.billingCycle === "weekly") monthlyPrice *= 4;
+        amountInEur = monthlyPrice;
+      }
 
       const current = map.get(sub.category) || 0;
-      map.set(sub.category, current + monthlyPrice);
+      map.set(sub.category, current + amountInEur);
     });
 
     return Array.from(map.entries())
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value);
-  }, [subscriptions]);
+  }, [subscriptions, payments]);
 
-  if (data.length === 0) return null;
+  if (data.length === 0 || data.every((d) => d.value === 0)) return null;
 
   const topCategoryName = data[0]?.name || "";
 
   return (
     <Card className="p-6 bg-card/40 border-border backdrop-blur-md flex flex-col items-center justify-center min-h-[300px] shadow-sm">
       <h3 className="text-sm font-medium text-muted-foreground self-start mb-4">
-        Spend by Category
+        Spend by Category (This Month)
       </h3>
 
       <div className="w-full h-[200px] relative isolate">
@@ -102,8 +129,6 @@ export function CategoryDistribution({ subscriptions }: Props) {
               <Tooltip
                 cursor={false}
                 wrapperStyle={{ zIndex: 50, outline: "none" }}
-                // El tooltip lo dejamos oscuro siempre porque se lee mejor en gráficos,
-                // o puedes usar bg-popover text-popover-foreground si prefieres
                 contentStyle={{
                   backgroundColor: "#18181b",
                   borderColor: "#27272a",
@@ -133,11 +158,19 @@ export function CategoryDistribution({ subscriptions }: Props) {
           >
             <div className="flex items-center gap-2 overflow-hidden">
               <div
-                className={`w-2 h-2 rounded-full shrink-0 transition-all duration-300 ${activeIndex === index ? "scale-150 ring-2 ring-foreground/20" : ""}`}
+                className={`w-2 h-2 rounded-full shrink-0 transition-all duration-300 ${
+                  activeIndex === index
+                    ? "scale-150 ring-2 ring-foreground/20"
+                    : ""
+                }`}
                 style={{ backgroundColor: COLORS[index % COLORS.length] }}
               />
               <span
-                className={`transition-colors truncate ${activeIndex === index ? "text-foreground font-medium" : "text-muted-foreground"}`}
+                className={`transition-colors truncate ${
+                  activeIndex === index
+                    ? "text-foreground font-medium"
+                    : "text-muted-foreground"
+                }`}
               >
                 {entry.name}
               </span>

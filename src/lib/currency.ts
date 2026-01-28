@@ -33,7 +33,6 @@ export async function refreshExchangeRates(): Promise<boolean> {
 
         // Si el caché es fresco (< 24h), lo usamos
         if (now - parsed.timestamp < CACHE_DURATION) {
-          console.log("💱 Using cached exchange rates");
           currentRates = { ...FALLBACK_RATES, ...parsed.rates };
           return true; // Éxito (desde caché)
         }
@@ -45,7 +44,6 @@ export async function refreshExchangeRates(): Promise<boolean> {
 
   // B. Si no hay caché válido, llamamos a la API
   try {
-    console.log("🌐 Fetching live exchange rates...");
     // Pedimos tasas con base EUR para USD y GBP
     const res = await fetch(
       "https://api.frankfurter.app/latest?from=EUR&to=USD,GBP",
