@@ -6,6 +6,7 @@ import { useSubscriptionStore } from "@/features/subscriptions/store/subscriptio
 import { SubscriptionModal } from "@/features/subscriptions/components/SubscriptionModal";
 import { SubscriptionCard } from "@/features/subscriptions/components/SubscriptionCard";
 import { CategoryDistribution } from "@/features/subscriptions/components/CategoryDistribution";
+import { SubscriptionStack } from "@/features/dashboard/components/SubscriptionStack";
 import { BackgroundGlow } from "@/components/ui/background-glow";
 import { EnsoLogo } from "@/components/ui/enso-logo";
 import { Card } from "@/components/ui/card";
@@ -13,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import {
   Wallet,
   TrendingUp,
+  LayoutList,
   LayoutGrid,
   Calendar as CalendarIcon,
   Plus,
@@ -21,6 +23,7 @@ import {
   Loader2,
   LogOut,
 } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { convertToEur, formatCurrency, getRate } from "@/lib/currency";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -61,6 +64,8 @@ export default function DashboardPage() {
 
   const [isLogPaymentOpen, setIsLogPaymentOpen] = useState(false);
   const [subToLog, setSubToLog] = useState<Subscription | null>(null);
+
+  const [viewMode, setViewMode] = useState<"grid" | "stack">("grid");
 
   useEffect(() => {
     checkAuth();
@@ -364,40 +369,95 @@ export default function DashboardPage() {
                 </div>
               </div>
               <div className="lg:col-span-2 space-y-6">
+                {/* TÍTULO Y BOTONES */}
                 <div className="flex items-center justify-between px-1">
-                  <h3 className="text-xl font-semibold tracking-tight text-foreground">
-                    Active Services ({currentWorkspace})
-                  </h3>
+                  <div className="flex items-center gap-4">
+                    <h3 className="text-xl font-semibold tracking-tight text-foreground">
+                      Active Services
+                    </h3>
+                    <div className="flex items-center bg-muted/50 p-1 rounded-lg border border-border">
+                      <button
+                        onClick={() => setViewMode("grid")}
+                        className={`p-1.5 rounded-md transition-all ${
+                          viewMode === "grid"
+                            ? "bg-background shadow-sm text-foreground"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                        title="Grid View"
+                      >
+                        <LayoutGrid className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setViewMode("stack")}
+                        className={`p-1.5 rounded-md transition-all ${
+                          viewMode === "stack"
+                            ? "bg-background shadow-sm text-foreground"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                        title="Stack View"
+                      >
+                        <LayoutList className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
                   <span className="text-xs font-mono text-muted-foreground border border-border px-2 py-1 rounded-md">
                     {isLoading ? "..." : filteredSubscriptions.length} ITEMS
                   </span>
                 </div>
-                <div className="grid gap-3">
-                  {isLoading ? (
-                    Array.from({ length: 3 }).map((_, i) => (
-                      <Skeleton
-                        key={i}
-                        className="h-28 w-full rounded-xl bg-muted"
-                      />
-                    ))
-                  ) : filteredSubscriptions.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-20 border border-dashed border-border rounded-2xl bg-muted/20">
-                      <EnsoLogo className="w-8 h-8 text-muted-foreground opacity-50 mb-4" />
-                      <p className="text-muted-foreground font-medium">
-                        No {currentWorkspace} subscriptions yet
-                      </p>
-                    </div>
-                  ) : (
-                    filteredSubscriptions.map((sub) => (
-                      <SubscriptionCard
-                        key={sub.id}
-                        subscription={sub}
-                        onDelete={handleDelete}
-                        onLogPayment={handleOpenLogPayment}
-                      />
-                    ))
-                  )}
-                </div>
+
+                {/* --- ÁREA DE SCROLL PARA LA LISTA --- */}
+                {/* Ajustamos la altura: min-h para que no sea enana, max-h para que no explote */}
+                <ScrollArea className="h-[calc(100vh-220px)] min-h-[400px] w-full rounded-md pr-3">
+                  <div className="grid gap-3 mt-1 pb-4">
+                    {isLoading ? (
+                      Array.from({ length: 3 }).map((_, i) => (
+                        <Skeleton
+                          key={i}
+                          className="h-28 w-full rounded-xl bg-muted"
+                        />
+                      ))
+                    ) : filteredSubscriptions.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-20 border border-dashed border-border rounded-2xl bg-muted/20">
+                        <EnsoLogo className="w-8 h-8 text-muted-foreground opacity-50 mb-4" />
+                        <p className="text-muted-foreground font-medium">
+                          No {currentWorkspace} subscriptions yet
+                        </p>
+                      </div>
+                    ) : viewMode === "grid" ? (
+                      // VISTA GRID
+                      filteredSubscriptions.map((sub) => (
+                        <SubscriptionCard
+                          key={sub.id}
+                          subscription={sub}
+                          onDelete={handleDelete}
+                          onLogPayment={handleOpenLogPayment}
+                        />
+                      ))
+                    ) : (
+                      // VISTA STACK
+                      Object.entries(
+                        filteredSubscriptions.reduce(
+                          (acc, sub) => {
+                            const cat = sub.category || "Other";
+                            if (!acc[cat]) acc[cat] = [];
+                            acc[cat].push(sub);
+                            return acc;
+                          },
+                          {} as Record<string, typeof filteredSubscriptions>,
+                        ),
+                      ).map(([category, subs]) => (
+                        <SubscriptionStack
+                          key={category}
+                          category={category}
+                          subscriptions={subs}
+                          onDelete={handleDelete}
+                          onLogPayment={handleOpenLogPayment}
+                        />
+                      ))
+                    )}
+                  </div>
+                </ScrollArea>
               </div>
             </div>
           </TabsContent>
