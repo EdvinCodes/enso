@@ -14,7 +14,7 @@ import {
   FileSpreadsheet,
 } from "lucide-react";
 import { exportData, importData, clearAllData } from "@/lib/data";
-import { useSubscriptionStore } from "../subscriptions/store/subscription.store";
+import { useSubscriptionStore } from "@/features/subscriptions/store/subscription.store";
 import { BudgetsManager } from "./BudgetsManager";
 import { toast } from "sonner";
 

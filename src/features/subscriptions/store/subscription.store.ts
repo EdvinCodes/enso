@@ -91,6 +91,7 @@ interface SubscriptionState {
   // History / Payments
   fetchHistory: () => Promise<void>;
   logPayment: (data: NewPaymentData) => Promise<void>;
+  deletePayment: (paymentId: string) => Promise<void>;
 
   signOut: () => Promise<void>;
 }
@@ -271,6 +272,26 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
     }));
 
     toast.success("Payment recorded");
+  },
+
+  deletePayment: async (paymentId) => {
+    const { error } = await supabase
+      .from("payments")
+      .delete()
+      .eq("id", paymentId);
+
+    if (error) {
+      toast.error("Failed to delete payment");
+      console.error(error);
+      return;
+    }
+
+    // Actualizamos el estado local quitando ese pago
+    set((state) => ({
+      payments: state.payments.filter((p) => p.id !== paymentId),
+    }));
+
+    toast.success("Payment removed from history");
   },
 
   addSubscription: async (formData) => {

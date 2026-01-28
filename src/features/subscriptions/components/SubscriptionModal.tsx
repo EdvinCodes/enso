@@ -12,6 +12,8 @@ import {
   Sparkles,
   ChevronDown,
   ChevronUp,
+  History,
+  PencilRuler,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -49,7 +51,10 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 
-import { useSubscriptionStore } from "../store/subscription.store";
+// --- IMPORTAMOS LAS TABS ---
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+import { useSubscriptionStore } from "@/features/subscriptions/store/subscription.store";
 import {
   subscriptionFormSchema,
   type SubscriptionFormValues,
@@ -58,6 +63,7 @@ import { PRESET_SERVICES } from "@/lib/constants";
 import { Currency, SubscriptionCategory } from "@/types";
 import { toast } from "sonner";
 import { CancellationModal } from "@/components/cancellation-modal";
+import { SubscriptionHistory } from "@/features/subscriptions/components/SubscriptionHistory"; // <--- IMPORTANTE
 
 interface Props {
   trigger?: React.ReactNode;
@@ -76,8 +82,6 @@ export function SubscriptionModal({ trigger }: Props) {
 
   const [isEditing, setIsEditing] = useState(false);
   const [showCancelHelper, setShowCancelHelper] = useState(false);
-
-  // NUEVO ESTADO: Controlar si se ven los presets o no
   const [showPresets, setShowPresets] = useState(false);
 
   const form = useForm<SubscriptionFormValues>({
@@ -98,7 +102,6 @@ export function SubscriptionModal({ trigger }: Props) {
       const editing = !!subscriptionToEdit;
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsEditing(editing);
-      // Al abrir, cerramos presets por defecto para ahorrar espacio
       setShowPresets(false);
 
       if (editing && subscriptionToEdit) {
@@ -157,7 +160,6 @@ export function SubscriptionModal({ trigger }: Props) {
     form.setValue("currency", preset.currency as Currency);
     form.setValue("category", preset.category as SubscriptionCategory);
 
-    // Opcional: Cerrar presets automáticamente al elegir uno
     setShowPresets(false);
     toast.info(`Applied: ${preset.name}`, {
       description: "You can now adjust the price or date.",
@@ -170,6 +172,269 @@ export function SubscriptionModal({ trigger }: Props) {
     if (!isOpen) closeModal();
   };
 
+  // --- RENDERIZADO DEL FORMULARIO (Extraído para no repetir código) ---
+  const renderForm = () => (
+    <>
+      {/* SECCIÓN PRESETS (Solo visible si es Nuevo o si el usuario quiere expandirlo) */}
+      {!isEditing && (
+        <div className="mb-4 border border-border rounded-lg bg-muted/20 overflow-hidden transition-all">
+          <button
+            type="button"
+            onClick={() => setShowPresets(!showPresets)}
+            className="w-full flex items-center justify-between p-3 text-sm font-medium hover:bg-muted/50 transition-colors"
+          >
+            <span className="flex items-center gap-2 text-primary">
+              <Sparkles className="w-4 h-4" />
+              Quick Fill from Popular Services
+            </span>
+            {showPresets ? (
+              <ChevronUp className="w-4 h-4 text-muted-foreground" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-muted-foreground" />
+            )}
+          </button>
+
+          {showPresets && (
+            <div className="p-3 pt-0 grid grid-cols-3 sm:grid-cols-4 gap-2 animate-in slide-in-from-top-2 duration-200">
+              {PRESET_SERVICES.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => applyPreset(preset)}
+                  className="flex flex-col items-center justify-center p-2 rounded-lg bg-background border border-border hover:border-primary/50 hover:shadow-sm transition-all gap-1.5 group"
+                >
+                  <div
+                    className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm"
+                    style={{ backgroundColor: preset.color }}
+                  >
+                    {preset.icon}
+                  </div>
+                  <span className="text-[10px] text-muted-foreground group-hover:text-foreground font-medium truncate w-full text-center">
+                    {preset.name}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3">
+          <FormField
+            control={form.control}
+            name="name"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-xs">Service Name</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="e.g. Netflix"
+                    {...field}
+                    className="h-9"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <div className="flex gap-3">
+            <FormField
+              control={form.control}
+              name="price"
+              render={({ field }) => (
+                <FormItem className="flex-1">
+                  <FormLabel className="text-xs">Price</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      className="h-9"
+                      value={field.value}
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value);
+                        field.onChange(isNaN(value) ? 0 : value);
+                      }}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="currency"
+              render={({ field }) => (
+                <FormItem className="w-[85px]">
+                  <FormLabel className="text-xs">Currency</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="EUR" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="EUR">EUR</SelectItem>
+                      <SelectItem value="USD">USD</SelectItem>
+                      <SelectItem value="GBP">GBP</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <div className="flex gap-3">
+            <FormField
+              control={form.control}
+              name="category"
+              render={({ field }) => (
+                <FormItem className="flex-1">
+                  <FormLabel className="text-xs">Category</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Select" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="Entertainment">
+                        Entertainment
+                      </SelectItem>
+                      <SelectItem value="Software">Software</SelectItem>
+                      <SelectItem value="Utilities">Utilities</SelectItem>
+                      <SelectItem value="Health">Health</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="billingCycle"
+              render={({ field }) => (
+                <FormItem className="flex-1">
+                  <FormLabel className="text-xs">Cycle</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Select" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="monthly">Monthly</SelectItem>
+                      <SelectItem value="yearly">Yearly</SelectItem>
+                      <SelectItem value="weekly">Weekly</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <FormField
+            control={form.control}
+            name="startDate"
+            render={({ field }) => (
+              <FormItem className="flex flex-col">
+                <FormLabel className="text-xs">First Payment</FormLabel>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <FormControl>
+                      <Button
+                        variant={"outline"}
+                        className={cn(
+                          "w-full pl-3 text-left font-normal h-9",
+                          !field.value && "text-muted-foreground",
+                        )}
+                      >
+                        {field.value ? (
+                          format(field.value, "PPP")
+                        ) : (
+                          <span>Pick a date</span>
+                        )}
+                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                      </Button>
+                    </FormControl>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={field.value}
+                      onSelect={(date) => date && field.onChange(date)}
+                      disabled={(date) =>
+                        date > new Date() || date < new Date("1900-01-01")
+                      }
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="workspace"
+            render={({ field }) => (
+              <FormItem className="space-y-2 pt-1">
+                <FormLabel className="text-xs">Assign Workspace</FormLabel>
+                <FormControl>
+                  <RadioGroup
+                    onValueChange={field.onChange}
+                    defaultValue={field.value || currentWorkspace}
+                    className="flex gap-4"
+                  >
+                    <FormItem className="flex items-center space-x-2 space-y-0">
+                      <FormControl>
+                        <RadioGroupItem value="personal" />
+                      </FormControl>
+                      <FormLabel className="font-normal text-sm cursor-pointer flex items-center gap-1.5">
+                        <User className="w-3.5 h-3.5" /> Personal
+                      </FormLabel>
+                    </FormItem>
+                    <FormItem className="flex items-center space-x-2 space-y-0">
+                      <FormControl>
+                        <RadioGroupItem value="business" />
+                      </FormControl>
+                      <FormLabel className="font-normal text-sm cursor-pointer flex items-center gap-1.5">
+                        <Briefcase className="w-3.5 h-3.5" /> Business
+                      </FormLabel>
+                    </FormItem>
+                  </RadioGroup>
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          <div className="flex justify-end gap-2 pt-4 border-t border-border mt-4">
+            <Button
+              variant="ghost"
+              type="button"
+              onClick={closeModal}
+              className="h-9"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={isLoading}
+              className="h-9 bg-primary hover:bg-primary/90"
+            >
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isEditing ? "Update" : "Save"}
+            </Button>
+          </div>
+        </form>
+      </Form>
+    </>
+  );
+
   return (
     <>
       <Dialog open={isModalOpen} onOpenChange={handleOpenChange}>
@@ -179,307 +444,78 @@ export function SubscriptionModal({ trigger }: Props) {
           </DialogTrigger>
         )}
 
-        {/* Ajustado max-height y padding */}
-        <DialogContent className="w-full sm:max-w-[480px] max-h-[90vh] overflow-y-auto bg-background text-foreground border-border p-0 gap-0">
+        <DialogContent className="w-full sm:max-w-[500px] max-h-[90vh] overflow-y-auto bg-background text-foreground border-border p-0 gap-0">
           <DialogHeader className="p-6 pb-2">
-            <DialogTitle className="text-xl">
-              {isEditing ? "Edit Subscription" : "New Subscription"}
+            <DialogTitle className="text-xl flex items-center gap-2">
+              {isEditing && subscriptionToEdit && (
+                <div className="w-6 h-6 rounded bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary">
+                  {subscriptionToEdit.name.charAt(0)}
+                </div>
+              )}
+              {isEditing ? subscriptionToEdit?.name : "New Subscription"}
             </DialogTitle>
             <DialogDescription>
               {isEditing
-                ? "Update your subscription details below."
+                ? "Manage details and view history."
                 : "Add a recurring expense to your tracker."}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="px-6 pb-6">
-            {/* --- SECCIÓN PRESETS COLAPSABLE --- */}
-            {!isEditing && (
-              <div className="mb-4 border border-border rounded-lg bg-muted/20 overflow-hidden transition-all">
-                <button
-                  type="button"
-                  onClick={() => setShowPresets(!showPresets)}
-                  className="w-full flex items-center justify-between p-3 text-sm font-medium hover:bg-muted/50 transition-colors"
-                >
-                  <span className="flex items-center gap-2 text-primary">
-                    <Sparkles className="w-4 h-4" />
-                    Quick Fill from Popular Services
-                  </span>
-                  {showPresets ? (
-                    <ChevronUp className="w-4 h-4 text-muted-foreground" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                  )}
-                </button>
-
-                {showPresets && (
-                  <div className="p-3 pt-0 grid grid-cols-3 sm:grid-cols-4 gap-2 animate-in slide-in-from-top-2 duration-200">
-                    {PRESET_SERVICES.map((preset) => (
-                      <button
-                        key={preset.id}
-                        type="button"
-                        onClick={() => applyPreset(preset)}
-                        className="flex flex-col items-center justify-center p-2 rounded-lg bg-background border border-border hover:border-primary/50 hover:shadow-sm transition-all gap-1.5 group"
-                      >
-                        <div
-                          className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm"
-                          style={{ backgroundColor: preset.color }}
-                        >
-                          {preset.icon}
-                        </div>
-                        <span className="text-[10px] text-muted-foreground group-hover:text-foreground font-medium truncate w-full text-center">
-                          {preset.name}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
+          {/* --- LÓGICA DE TABS --- */}
+          {isEditing && subscriptionToEdit ? (
+            <Tabs defaultValue="details" className="w-full">
+              <div className="px-6 border-b border-border">
+                <TabsList className="w-full justify-start bg-transparent h-auto p-0 gap-6">
+                  <TabsTrigger
+                    value="details"
+                    className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-0 py-3 gap-2 text-muted-foreground data-[state=active]:text-foreground"
+                  >
+                    <PencilRuler className="w-4 h-4" /> Details
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="history"
+                    className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-0 py-3 gap-2 text-muted-foreground data-[state=active]:text-foreground"
+                  >
+                    <History className="w-4 h-4" /> History
+                  </TabsTrigger>
+                </TabsList>
               </div>
-            )}
 
-            <Form {...form}>
-              <form
-                onSubmit={form.handleSubmit(onSubmit)}
-                className="space-y-3"
+              {/* PESTAÑA DETALLES */}
+              <TabsContent
+                value="details"
+                className="p-6 pt-4 focus-visible:outline-none animate-in fade-in duration-300"
               >
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-xs">Service Name</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="e.g. Netflix"
-                          {...field}
-                          className="h-9"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                {renderForm()}
 
-                <div className="flex gap-3">
-                  <FormField
-                    control={form.control}
-                    name="price"
-                    render={({ field }) => (
-                      <FormItem className="flex-1">
-                        <FormLabel className="text-xs">Price</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            placeholder="0.00"
-                            className="h-9"
-                            value={field.value}
-                            onChange={(e) => {
-                              const value = parseFloat(e.target.value);
-                              field.onChange(isNaN(value) ? 0 : value);
-                            }}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="currency"
-                    render={({ field }) => (
-                      <FormItem className="w-[85px]">
-                        <FormLabel className="text-xs">Currency</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value}
-                        >
-                          <FormControl>
-                            <SelectTrigger className="h-9">
-                              <SelectValue placeholder="EUR" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="EUR">EUR</SelectItem>
-                            <SelectItem value="USD">USD</SelectItem>
-                            <SelectItem value="GBP">GBP</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="flex gap-3">
-                  <FormField
-                    control={form.control}
-                    name="category"
-                    render={({ field }) => (
-                      <FormItem className="flex-1">
-                        <FormLabel className="text-xs">Category</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value}
-                        >
-                          <FormControl>
-                            <SelectTrigger className="h-9">
-                              <SelectValue placeholder="Select" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="Entertainment">
-                              Entertainment
-                            </SelectItem>
-                            <SelectItem value="Software">Software</SelectItem>
-                            <SelectItem value="Utilities">Utilities</SelectItem>
-                            <SelectItem value="Health">Health</SelectItem>
-                            <SelectItem value="Other">Other</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="billingCycle"
-                    render={({ field }) => (
-                      <FormItem className="flex-1">
-                        <FormLabel className="text-xs">Cycle</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value}
-                        >
-                          <FormControl>
-                            <SelectTrigger className="h-9">
-                              <SelectValue placeholder="Select" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="monthly">Monthly</SelectItem>
-                            <SelectItem value="yearly">Yearly</SelectItem>
-                            <SelectItem value="weekly">Weekly</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <FormField
-                  control={form.control}
-                  name="startDate"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-col">
-                      <FormLabel className="text-xs">First Payment</FormLabel>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <FormControl>
-                            <Button
-                              variant={"outline"}
-                              className={cn(
-                                "w-full pl-3 text-left font-normal h-9",
-                                !field.value && "text-muted-foreground",
-                              )}
-                            >
-                              {field.value ? (
-                                format(field.value, "PPP")
-                              ) : (
-                                <span>Pick a date</span>
-                              )}
-                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                            </Button>
-                          </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={field.value}
-                            onSelect={(date) => date && field.onChange(date)}
-                            disabled={(date) =>
-                              date > new Date() || date < new Date("1900-01-01")
-                            }
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="workspace"
-                  render={({ field }) => (
-                    <FormItem className="space-y-2 pt-1">
-                      <FormLabel className="text-xs">
-                        Assign Workspace
-                      </FormLabel>
-                      <FormControl>
-                        <RadioGroup
-                          onValueChange={field.onChange}
-                          defaultValue={field.value || currentWorkspace}
-                          className="flex gap-4"
-                        >
-                          <FormItem className="flex items-center space-x-2 space-y-0">
-                            <FormControl>
-                              <RadioGroupItem value="personal" />
-                            </FormControl>
-                            <FormLabel className="font-normal text-sm cursor-pointer flex items-center gap-1.5">
-                              <User className="w-3.5 h-3.5" /> Personal
-                            </FormLabel>
-                          </FormItem>
-                          <FormItem className="flex items-center space-x-2 space-y-0">
-                            <FormControl>
-                              <RadioGroupItem value="business" />
-                            </FormControl>
-                            <FormLabel className="font-normal text-sm cursor-pointer flex items-center gap-1.5">
-                              <Briefcase className="w-3.5 h-3.5" /> Business
-                            </FormLabel>
-                          </FormItem>
-                        </RadioGroup>
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-
-                <div className="flex justify-end gap-2 pt-4 border-t border-border mt-4">
+                {/* Botón de Cancelación */}
+                <div className="mt-4 pt-4 border-t border-border flex justify-between items-center">
+                  <span className="text-xs text-muted-foreground">
+                    Thinking of leaving?
+                  </span>
                   <Button
-                    variant="ghost"
                     type="button"
-                    onClick={closeModal}
-                    className="h-9"
+                    variant="link"
+                    className="text-red-500 hover:text-red-600 h-auto p-0 text-xs font-medium"
+                    onClick={() => setShowCancelHelper(true)}
                   >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    disabled={isLoading}
-                    className="h-9 bg-primary hover:bg-primary/90"
-                  >
-                    {isLoading && (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    )}
-                    {isEditing ? "Update" : "Save"}
+                    Get Cancellation Help
                   </Button>
                 </div>
-              </form>
-            </Form>
+              </TabsContent>
 
-            {isEditing && (
-              <div className="mt-4 pt-4 flex justify-center">
-                <Button
-                  type="button"
-                  variant="link"
-                  className="text-red-500 hover:text-red-600 h-auto p-0 text-xs font-medium opacity-80 hover:opacity-100 transition-opacity"
-                  onClick={() => setShowCancelHelper(true)}
-                >
-                  Need help canceling this subscription?
-                </Button>
-              </div>
-            )}
-          </div>
+              {/* PESTAÑA HISTORIAL */}
+              <TabsContent
+                value="history"
+                className="p-6 pt-4 focus-visible:outline-none animate-in fade-in duration-300"
+              >
+                <SubscriptionHistory subscription={subscriptionToEdit} />
+              </TabsContent>
+            </Tabs>
+          ) : (
+            // SI ES NUEVO (SIN TABS)
+            <div className="p-6 pt-4">{renderForm()}</div>
+          )}
         </DialogContent>
       </Dialog>
 

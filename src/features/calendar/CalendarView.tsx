@@ -28,6 +28,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
+import { useSubscriptionStore } from "@/features/subscriptions/store/subscription.store";
+
 interface Props {
   subscriptions: Subscription[];
   payments: Payment[]; // <--- Recibimos pagos
@@ -47,6 +49,8 @@ export function CalendarView({ subscriptions, payments }: Props) {
     start: calendarStart,
     end: calendarEnd,
   });
+
+  const { openModal } = useSubscriptionStore();
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -152,6 +156,11 @@ export function CalendarView({ subscriptions, payments }: Props) {
                                 ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400"
                                 : "bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400",
                             )}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openModal(sub); // <--- ESTO ABRIRÁ EL MODAL CON LAS TABS
+                            }}
+                            style={{ cursor: "pointer" }}
                           >
                             {p.status === "paid" ? (
                               <Check className="w-3 h-3" />
