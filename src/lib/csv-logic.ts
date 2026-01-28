@@ -64,11 +64,17 @@ export function parseAndDetect(file: File): Promise<DetectedSubscription[]> {
               price = Math.abs(price);
 
               if (price > 0 && price < 1000) {
+                let detectedCurrency: "EUR" | "USD" | "GBP" = "EUR";
+                if (rowString.includes("$") || rowString.includes("usd"))
+                  detectedCurrency = "USD";
+                if (rowString.includes("£") || rowString.includes("gbp"))
+                  detectedCurrency = "GBP";
+
                 detected.push({
                   id: `csv-${index}`,
                   name: matchedService,
                   price: price,
-                  currency: "EUR",
+                  currency: detectedCurrency,
                   date: new Date(),
                   originalDescription: rowString.substring(0, 50) + "...",
                 });
