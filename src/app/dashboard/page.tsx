@@ -22,10 +22,13 @@ import {
   Settings,
   Loader2,
   LogOut,
+  Receipt,
+  Trash2,
+  Clock,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-import { convertToEur, formatCurrency, getRate } from "@/lib/currency";
+import { convertToEur, formatCurrency } from "@/lib/currency";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CalendarView } from "@/features/calendar/CalendarView";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
@@ -39,10 +42,13 @@ import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { SettingsView } from "@/features/settings/SettingsView";
 import { BudgetProgress } from "@/features/subscriptions/components/BudgetProgress";
 import { CashflowChart } from "@/features/dashboard/components/CashflowChart";
-import { Subscription, SubscriptionCategory, Currency } from "@/types"; // <--- Import Currency
+import { Subscription, SubscriptionCategory, Currency } from "@/types";
 import { toast } from "sonner";
 import { LogPaymentModal } from "@/components/log-payment-modal";
-import { isSameMonth, parseISO } from "date-fns"; // <--- Import necesarios para la fecha
+import { isSameMonth, parseISO, format } from "date-fns";
+
+// Definimos el tipo para las vistas
+type DashboardView = "overview" | "calendar" | "settings";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -59,13 +65,20 @@ export default function DashboardPage() {
     openModal,
     currentWorkspace,
     budgets,
-    payments, // <--- Importante: Traemos los pagos del store
+    payments,
   } = useSubscriptionStore();
 
   const [isLogPaymentOpen, setIsLogPaymentOpen] = useState(false);
   const [subToLog, setSubToLog] = useState<Subscription | null>(null);
-
   const [viewMode, setViewMode] = useState<"grid" | "stack">("grid");
+
+  // SOLUCIÓN ERROR NOTIFICATION: Inicialización perezosa (Lazy state)
+  const [permission, setPermission] = useState(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      return Notification.permission;
+    }
+    return "default";
+  });
 
   useEffect(() => {
     checkAuth();
@@ -79,15 +92,6 @@ export default function DashboardPage() {
 
   useSmartNotifications(subscriptions);
 
-  const [permission, setPermission] = useState("default");
-
-  useEffect(() => {
-    if ("Notification" in window && Notification.permission !== "default") {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setPermission(Notification.permission);
-    }
-  }, []);
-
   const enableNotifications = async () => {
     const granted = await requestNotificationPermission();
     if (granted) {
@@ -96,22 +100,20 @@ export default function DashboardPage() {
         "Notifications Active 🔔",
         "We'll notify you 3 days before any payment.",
       );
-      toast.success("Notifications enabled", {
-        description: "You will be alerted 3 days before payments.",
-      });
+      toast.success("Notifications enabled");
     } else {
       setPermission("denied");
       toast.error("Permission denied", {
-        description: "Please enable notifications in your browser settings.",
+        description: "Check browser settings.",
       });
     }
   };
 
   const handleDelete = async (id: string) => {
     toast.promise(deleteSubscription(id), {
-      loading: "Deleting subscription...",
-      success: "Subscription removed",
-      error: "Failed to delete subscription",
+      loading: "Deleting item...",
+      success: "Item removed",
+      error: "Failed to delete",
     });
   };
 
@@ -126,23 +128,30 @@ export default function DashboardPage() {
     setIsLogPaymentOpen(true);
   };
 
-  const filteredSubscriptions = subscriptions.filter((sub) => {
+  const workspaceSubs = subscriptions.filter((sub) => {
     const subWorkspace = sub.workspace || "personal";
     return subWorkspace === currentWorkspace;
   });
 
-  // --- LÓGICA DE CÁLCULO REAL ---
-  // Esta función reemplaza a los antiguos reduce().
-  // Calcula el gasto real usando pagos si existen, o proyecciones si no.
-  const calculateCurrentMonthSpend = () => {
+  const recurringSubs = workspaceSubs.filter(
+    (s) => s.billingCycle !== "one_time",
+  );
+
+  const oneTimeExpenses = workspaceSubs
+    .filter((s) => s.billingCycle === "one_time")
+    .sort(
+      (a, b) =>
+        new Date(b.startDate).getTime() - new Date(a.startDate).getTime(),
+    );
+
+  const calculateRecurringRunRate = () => {
     const now = new Date();
     let total = 0;
     const catTotals: Record<string, number> = {};
 
-    filteredSubscriptions.forEach((sub) => {
+    recurringSubs.forEach((sub) => {
       if (!sub.active) return;
 
-      // 1. ¿Existe un pago real este mes?
       const realPayment = payments.find(
         (p) =>
           p.subscription_id === sub.id &&
@@ -152,17 +161,13 @@ export default function DashboardPage() {
       let amount = 0;
 
       if (realPayment) {
-        // Usamos el dato REAL
         if (realPayment.status === "paid") {
-          // FIX: Forzamos el tipo con "as Currency"
           amount = convertToEur(
             realPayment.amount,
             realPayment.currency as Currency,
           );
         }
-        // Si es "skipped", amount se queda en 0.
       } else {
-        // Usamos la PROYECCIÓN (teórico)
         let price = convertToEur(sub.price, sub.currency);
         if (sub.billingCycle === "yearly") price /= 12;
         if (sub.billingCycle === "weekly") price *= 4;
@@ -176,9 +181,8 @@ export default function DashboardPage() {
     return { total, catTotals };
   };
 
-  // Ejecutamos la función
-  const { total: monthlyTotal, catTotals: categoryMonthlyTotals } =
-    calculateCurrentMonthSpend();
+  const { total: monthlyRunRate, catTotals: categoryMonthlyTotals } =
+    calculateRecurringRunRate();
 
   const activeBudgets = (Object.keys(budgets) as SubscriptionCategory[]).filter(
     (cat) => (budgets[cat] || 0) > 0,
@@ -195,6 +199,7 @@ export default function DashboardPage() {
   return (
     <main className="relative min-h-screen font-sans bg-background text-foreground transition-colors duration-300 selection:bg-primary/30">
       <BackgroundGlow />
+
       <SubscriptionModal />
 
       <LogPaymentModal
@@ -204,7 +209,6 @@ export default function DashboardPage() {
       />
 
       <div className="relative mx-auto max-w-6xl px-6 py-12 md:py-20 space-y-8">
-        {/* HEADER */}
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-card/50 border border-border rounded-xl backdrop-blur-md shadow-sm">
@@ -226,8 +230,7 @@ export default function DashboardPage() {
                 variant="ghost"
                 size="icon"
                 onClick={enableNotifications}
-                className="text-muted-foreground hover:text-foreground"
-                title="Enable payment alerts"
+                className="text-muted-foreground"
               >
                 <BellRing className="w-4 h-4" />
               </Button>
@@ -235,17 +238,14 @@ export default function DashboardPage() {
             <WorkspaceSwitcher />
             <CommandMenu />
             <ThemeToggle />
-
             <Button
               variant="ghost"
               size="icon"
               onClick={handleLogout}
-              className="text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
-              title="Sign Out"
+              className="text-muted-foreground hover:text-red-500"
             >
               <LogOut className="w-4 h-4" />
             </Button>
-
             <Button
               size="lg"
               className="shadow-lg shadow-primary/20"
@@ -256,27 +256,22 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        {/* TABS */}
+        {/* SOLUCIÓN ERROR ANY: Casting a DashboardView */}
         <Tabs
           value={currentView}
-          onValueChange={(v) =>
-            setView(v as "overview" | "calendar" | "settings")
-          }
+          onValueChange={(v) => setView(v as DashboardView)}
           className="space-y-8"
         >
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-border pb-4 gap-4">
             <TabsList className="bg-muted/50 border border-border">
               <TabsTrigger value="overview" className="gap-2">
-                <LayoutGrid className="w-4 h-4" />
-                Overview
+                <LayoutGrid className="w-4 h-4" /> Overview
               </TabsTrigger>
               <TabsTrigger value="calendar" className="gap-2">
-                <CalendarIcon className="w-4 h-4" />
-                Calendar
+                <CalendarIcon className="w-4 h-4" /> Calendar
               </TabsTrigger>
               <TabsTrigger value="settings" className="gap-2">
-                <Settings className="w-4 h-4" />
-                Settings
+                <Settings className="w-4 h-4" /> Settings
               </TabsTrigger>
             </TabsList>
             <div className="hidden md:flex items-center gap-2 text-xs font-mono text-muted-foreground bg-muted/30 px-2 py-1 rounded border border-border/50">
@@ -298,35 +293,31 @@ export default function DashboardPage() {
                       <Wallet className="w-32 h-32 rotate-[-15deg] text-foreground" />
                     </div>
                     <div className="relative z-10">
-                      <p className="text-sm font-medium text-muted-foreground mb-1">
-                        Monthly Run Rate (EUR)
+                      <p className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-2">
+                        Monthly Run Rate
+                        <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full border border-primary/20">
+                          Recurring
+                        </span>
                       </p>
                       <h2 className="text-4xl font-bold text-foreground tracking-tight">
-                        {formatCurrency(monthlyTotal)}
+                        {formatCurrency(monthlyRunRate)}
                       </h2>
                       <div className="flex flex-wrap gap-2 mt-4">
                         <div className="flex items-center gap-2 text-emerald-500 text-xs bg-emerald-500/10 w-fit px-2 py-1 rounded-full border border-emerald-500/20">
                           <TrendingUp className="w-3 h-3" />
                           <span>{currentWorkspace}</span>
                         </div>
-                        <div
-                          className="flex items-center gap-1 text-xs text-blue-500 bg-blue-500/10 px-2 py-1 rounded-full border border-blue-500/20"
-                          title={`1 EUR = ${getRate("USD")} USD`}
-                        >
-                          <span className="font-mono font-bold">
-                            1€=${getRate("USD")}
-                          </span>
-                        </div>
                       </div>
                     </div>
                   </>
                 )}
               </Card>
+
               <div className="md:col-span-2 h-full min-h-[300px]">
                 {isLoading ? (
                   <Skeleton className="w-full h-full rounded-xl bg-muted" />
                 ) : (
-                  <CashflowChart subscriptions={filteredSubscriptions} />
+                  <CashflowChart subscriptions={recurringSubs} />
                 )}
               </div>
             </div>
@@ -338,10 +329,11 @@ export default function DashboardPage() {
                     <Skeleton className="h-[300px] w-full rounded-xl bg-muted" />
                   ) : (
                     <CategoryDistribution
-                      subscriptions={filteredSubscriptions}
-                      payments={payments} // <--- Pasamos pagos
+                      subscriptions={recurringSubs}
+                      payments={payments}
                     />
                   )}
+
                   {activeBudgets.length > 0 && (
                     <Card className="p-5 space-y-4 border-border/50 bg-card/30 backdrop-blur-sm">
                       <div className="flex items-center gap-2 mb-2">
@@ -368,108 +360,174 @@ export default function DashboardPage() {
                   )}
                 </div>
               </div>
-              <div className="lg:col-span-2 space-y-6">
-                {/* TÍTULO Y BOTONES */}
-                <div className="flex items-center justify-between px-1">
-                  <div className="flex items-center gap-4">
-                    <h3 className="text-xl font-semibold tracking-tight text-foreground">
-                      Active Services
-                    </h3>
-                    <div className="flex items-center bg-muted/50 p-1 rounded-lg border border-border">
-                      <button
-                        onClick={() => setViewMode("grid")}
-                        className={`p-1.5 rounded-md transition-all ${
-                          viewMode === "grid"
-                            ? "bg-background shadow-sm text-foreground"
-                            : "text-muted-foreground hover:text-foreground"
-                        }`}
-                        title="Grid View"
-                      >
-                        <LayoutGrid className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => setViewMode("stack")}
-                        className={`p-1.5 rounded-md transition-all ${
-                          viewMode === "stack"
-                            ? "bg-background shadow-sm text-foreground"
-                            : "text-muted-foreground hover:text-foreground"
-                        }`}
-                        title="Stack View"
-                      >
-                        <LayoutList className="w-4 h-4" />
-                      </button>
+
+              <div className="lg:col-span-2 space-y-8">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between px-1">
+                    <div className="flex items-center gap-4">
+                      <h3 className="text-xl font-semibold tracking-tight text-foreground flex items-center gap-2">
+                        Recurring Subscriptions
+                      </h3>
+                      <div className="flex items-center bg-muted/50 p-1 rounded-lg border border-border">
+                        <button
+                          onClick={() => setViewMode("grid")}
+                          className={`p-1.5 rounded-md transition-all ${
+                            viewMode === "grid"
+                              ? "bg-background shadow-sm text-foreground"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                          title="Grid View"
+                        >
+                          <LayoutGrid className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setViewMode("stack")}
+                          className={`p-1.5 rounded-md transition-all ${
+                            viewMode === "stack"
+                              ? "bg-background shadow-sm text-foreground"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                          title="Stack View"
+                        >
+                          <LayoutList className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
+                    <span className="text-xs font-mono text-muted-foreground border border-border px-2 py-1 rounded-md">
+                      {isLoading ? "..." : recurringSubs.length} ACTIVE
+                    </span>
                   </div>
 
-                  <span className="text-xs font-mono text-muted-foreground border border-border px-2 py-1 rounded-md">
-                    {isLoading ? "..." : filteredSubscriptions.length} ITEMS
-                  </span>
+                  <ScrollArea className="h-[calc(100vh-450px)] min-h-[350px] w-full rounded-md pr-3">
+                    <div className="grid gap-3 mt-1 pb-4">
+                      {isLoading ? (
+                        Array.from({ length: 3 }).map((_, i) => (
+                          <Skeleton
+                            key={i}
+                            className="h-28 w-full rounded-xl bg-muted"
+                          />
+                        ))
+                      ) : recurringSubs.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-16 border border-dashed border-border rounded-2xl bg-muted/20">
+                          <EnsoLogo className="w-8 h-8 text-muted-foreground opacity-50 mb-4" />
+                          <p className="text-muted-foreground font-medium">
+                            No recurring subscriptions
+                          </p>
+                        </div>
+                      ) : viewMode === "grid" ? (
+                        recurringSubs.map((sub) => (
+                          <SubscriptionCard
+                            key={sub.id}
+                            subscription={sub}
+                            onDelete={handleDelete}
+                            onLogPayment={handleOpenLogPayment}
+                          />
+                        ))
+                      ) : (
+                        Object.entries(
+                          recurringSubs.reduce(
+                            (acc, sub) => {
+                              const cat = sub.category || "Other";
+                              if (!acc[cat]) acc[cat] = [];
+                              acc[cat].push(sub);
+                              return acc;
+                            },
+                            {} as Record<string, typeof recurringSubs>,
+                          ),
+                        ).map(([category, subs]) => (
+                          <SubscriptionStack
+                            key={category}
+                            category={category}
+                            subscriptions={subs}
+                            onDelete={handleDelete}
+                            onLogPayment={handleOpenLogPayment}
+                          />
+                        ))
+                      )}
+                    </div>
+                  </ScrollArea>
                 </div>
 
-                {/* --- ÁREA DE SCROLL PARA LA LISTA --- */}
-                {/* Ajustamos la altura: min-h para que no sea enana, max-h para que no explote */}
-                <ScrollArea className="h-[calc(100vh-220px)] min-h-[400px] w-full rounded-md pr-3">
-                  <div className="grid gap-3 mt-1 pb-4">
-                    {isLoading ? (
-                      Array.from({ length: 3 }).map((_, i) => (
-                        <Skeleton
-                          key={i}
-                          className="h-28 w-full rounded-xl bg-muted"
-                        />
-                      ))
-                    ) : filteredSubscriptions.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-20 border border-dashed border-border rounded-2xl bg-muted/20">
-                        <EnsoLogo className="w-8 h-8 text-muted-foreground opacity-50 mb-4" />
-                        <p className="text-muted-foreground font-medium">
-                          No {currentWorkspace} subscriptions yet
-                        </p>
+                {oneTimeExpenses.length > 0 && (
+                  <div className="pt-4 border-t border-border/50 animate-in fade-in slide-in-from-bottom-2">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="p-1.5 bg-orange-500/10 rounded-md">
+                        <Receipt className="w-4 h-4 text-orange-500" />
                       </div>
-                    ) : viewMode === "grid" ? (
-                      // VISTA GRID
-                      filteredSubscriptions.map((sub) => (
-                        <SubscriptionCard
-                          key={sub.id}
-                          subscription={sub}
-                          onDelete={handleDelete}
-                          onLogPayment={handleOpenLogPayment}
-                        />
-                      ))
-                    ) : (
-                      // VISTA STACK
-                      Object.entries(
-                        filteredSubscriptions.reduce(
-                          (acc, sub) => {
-                            const cat = sub.category || "Other";
-                            if (!acc[cat]) acc[cat] = [];
-                            acc[cat].push(sub);
-                            return acc;
-                          },
-                          {} as Record<string, typeof filteredSubscriptions>,
-                        ),
-                      ).map(([category, subs]) => (
-                        <SubscriptionStack
-                          key={category}
-                          category={category}
-                          subscriptions={subs}
-                          onDelete={handleDelete}
-                          onLogPayment={handleOpenLogPayment}
-                        />
-                      ))
-                    )}
+                      <h3 className="text-lg font-semibold tracking-tight text-foreground">
+                        One-Time Expenses
+                      </h3>
+                      <span className="text-xs text-muted-foreground ml-auto">
+                        Recent history
+                      </span>
+                    </div>
+
+                    <div className="bg-card/40 border border-border rounded-xl overflow-hidden shadow-sm">
+                      <div className="max-h-[300px] overflow-y-auto">
+                        <table className="w-full text-sm text-left">
+                          <thead className="bg-muted/30 text-muted-foreground text-[10px] uppercase tracking-wider sticky top-0 backdrop-blur-md">
+                            <tr>
+                              <th className="px-4 py-3 font-medium">Date</th>
+                              <th className="px-4 py-3 font-medium">
+                                Description
+                              </th>
+                              <th className="px-4 py-3 font-medium text-right">
+                                Amount
+                              </th>
+                              <th className="px-4 py-3 w-[50px]"></th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border/30">
+                            {oneTimeExpenses.map((expense) => (
+                              <tr
+                                key={expense.id}
+                                className="group hover:bg-muted/30 transition-colors"
+                              >
+                                <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                                  <div className="flex items-center gap-2">
+                                    <Clock className="w-3 h-3 opacity-50" />
+                                    {format(
+                                      new Date(expense.startDate),
+                                      "MMM d, yyyy",
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 font-medium text-foreground">
+                                  {expense.name}
+                                </td>
+                                <td className="px-4 py-3 text-right font-mono font-medium">
+                                  {formatCurrency(
+                                    expense.price,
+                                    expense.currency,
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-red-500"
+                                    onClick={() => handleDelete(expense.id)}
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
                   </div>
-                </ScrollArea>
+                )}
               </div>
             </div>
           </TabsContent>
 
           <TabsContent value="calendar" className="min-h-[600px]">
             {isLoading ? (
-              <Skeleton className="w-full h-[600px] bg-muted rounded-xl" />
+              <Skeleton className="w-full h-full" />
             ) : (
-              <CalendarView
-                subscriptions={filteredSubscriptions}
-                payments={payments} // <--- Pasamos pagos
-              />
+              <CalendarView subscriptions={workspaceSubs} payments={payments} />
             )}
           </TabsContent>
           <TabsContent value="settings" className="min-h-[600px]">

@@ -14,11 +14,19 @@ import {
   subMonths,
   parseISO,
   isSameDay,
+  isBefore,
 } from "date-fns";
-import { ChevronLeft, ChevronRight, Check, X } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Check,
+  X,
+  Clock,
+  AlertCircle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Subscription, Payment } from "@/types"; // <--- Importamos Payment
+import { Subscription, Payment, Currency } from "@/types";
 import { getPaymentsForDay } from "@/lib/calendar-logic";
 import { cn } from "@/lib/utils";
 import {
@@ -27,12 +35,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { formatCurrency } from "@/lib/currency";
 
 import { useSubscriptionStore } from "@/features/subscriptions/store/subscription.store";
 
 interface Props {
   subscriptions: Subscription[];
-  payments: Payment[]; // <--- Recibimos pagos
+  payments: Payment[];
 }
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -105,18 +114,28 @@ export function CalendarView({ subscriptions, payments }: Props) {
               ))}
             </div>
             {/* Días */}
-            <div className="grid grid-cols-7 auto-rows-[120px]">
+            <div className="grid grid-cols-7 auto-rows-[130px]">
               {calendarDays.map((day) => {
-                // 1. Proyecciones (Calculadas)
-                const projectedPayments = getPaymentsForDay(subscriptions, day);
+                const isCurrentMonth = isSameMonth(day, monthStart);
+                const isTodayDate = isToday(day);
 
-                // 2. Realidad (Logueada)
                 const realPaymentsForDay = payments.filter((p) =>
                   isSameDay(parseISO(p.payment_date), day),
                 );
 
-                const isCurrentMonth = isSameMonth(day, monthStart);
-                const isTodayDate = isToday(day);
+                const recurringSubs = subscriptions.filter(
+                  (s) => s.billingCycle !== "one_time",
+                );
+                const projected = getPaymentsForDay(recurringSubs, day);
+
+                const finalProjected = projected.filter((sub) => {
+                  const hasPaidThisMonth = payments.some(
+                    (p) =>
+                      p.subscription_id === sub.id &&
+                      isSameMonth(parseISO(p.payment_date), day),
+                  );
+                  return !hasPaidThisMonth;
+                });
 
                 return (
                   <div
@@ -124,87 +143,132 @@ export function CalendarView({ subscriptions, payments }: Props) {
                     className={cn(
                       "relative border-b border-r border-border p-2 transition-colors hover:bg-muted/30 flex flex-col gap-1",
                       !isCurrentMonth && "bg-muted/10 opacity-40",
-                      isTodayDate && "bg-primary/5",
+                      isTodayDate &&
+                        "bg-primary/5 ring-1 ring-inset ring-primary/20",
                     )}
                   >
-                    <span
-                      className={cn(
-                        "text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full mb-1",
-                        isTodayDate
-                          ? "bg-primary text-primary-foreground shadow-sm"
-                          : "text-foreground",
-                        !isCurrentMonth && "text-muted-foreground",
-                      )}
-                    >
-                      {format(day, "d")}
-                    </span>
+                    <div className="flex justify-between items-start mb-1">
+                      <span
+                        className={cn(
+                          "text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full",
+                          isTodayDate
+                            ? "bg-primary text-primary-foreground shadow-sm"
+                            : "text-foreground",
+                          !isCurrentMonth &&
+                            !isTodayDate &&
+                            "text-muted-foreground",
+                        )}
+                      >
+                        {format(day, "d")}
+                      </span>
+                    </div>
 
-                    <div className="flex flex-col gap-1 overflow-y-auto custom-scrollbar pr-1">
-                      {/* A. Renderizamos PAGOS REALES primero */}
+                    <div className="flex flex-col gap-1 overflow-y-auto custom-scrollbar pr-1 flex-1">
+                      {/* A. PAGOS REALES */}
                       {realPaymentsForDay.map((p) => {
                         const sub = subscriptions.find(
                           (s) => s.id === p.subscription_id,
                         );
-                        if (!sub) return null; // Si se borró la sub
+                        if (!sub) return null;
 
                         return (
                           <div
                             key={p.id}
                             className={cn(
-                              "flex items-center gap-1.5 border rounded px-2 py-1 shadow-sm",
+                              "group flex items-center gap-1.5 border rounded px-1.5 py-1 shadow-sm text-[10px] cursor-pointer transition-all hover:scale-[1.02]",
                               p.status === "paid"
                                 ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400"
                                 : "bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400",
                             )}
                             onClick={(e) => {
                               e.stopPropagation();
-                              openModal(sub); // <--- ESTO ABRIRÁ EL MODAL CON LAS TABS
+                              openModal(sub);
                             }}
-                            style={{ cursor: "pointer" }}
                           >
+                            {/* AQUI USAMOS getCategoryColor: Una barrita de color a la izquierda */}
+                            <div
+                              className="w-1 h-3 rounded-full shrink-0"
+                              style={{
+                                backgroundColor: getCategoryColor(sub.category),
+                              }}
+                            />
+
                             {p.status === "paid" ? (
-                              <Check className="w-3 h-3" />
+                              <Check className="w-3 h-3 shrink-0 opacity-50" />
                             ) : (
-                              <X className="w-3 h-3" />
+                              <X className="w-3 h-3 shrink-0 opacity-50" />
                             )}
-                            <span className="text-[10px] font-bold truncate line-through decoration-emerald-500/0">
-                              {sub.name}
-                            </span>
-                            <span className="text-[9px] ml-auto font-mono opacity-80">
-                              {p.amount}€
-                            </span>
+
+                            <div className="flex flex-col min-w-0 flex-1">
+                              <span className="font-bold truncate leading-tight">
+                                {sub.name}
+                              </span>
+                              <span className="font-mono opacity-80 leading-tight">
+                                {formatCurrency(
+                                  p.amount,
+                                  p.currency as Currency,
+                                )}
+                              </span>
+                            </div>
                           </div>
                         );
                       })}
 
-                      {/* B. Renderizamos PROYECCIONES (si no hay pago real ese día para esa sub) */}
-                      {projectedPayments.map((sub) => {
-                        // Truco: Si ya hay un pago real para esta suscripción en este mes, quizás no queramos mostrar la proyección para no duplicar.
-                        // Pero por simplicidad en el calendario, mostramos la proyección como "Planificado".
-                        // Si quieres ocultar la proyección si ya se pagó:
-                        // const alreadyPaidThisMonth = payments.some(...)
+                      {/* B. PROYECCIONES */}
+                      {finalProjected.map((sub) => {
+                        const isLate =
+                          isBefore(day, new Date()) && !isTodayDate;
 
                         return (
                           <TooltipProvider key={sub.id + "-proj"}>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <div className="flex items-center gap-1.5 bg-card border border-border rounded px-2 py-1 cursor-pointer hover:border-primary/50 transition-colors shadow-sm group opacity-70 border-dashed">
+                                <div
+                                  className={cn(
+                                    "flex items-center gap-1.5 border rounded px-1.5 py-1 cursor-pointer transition-all opacity-70 hover:opacity-100 text-[10px] hover:border-primary/50",
+                                    isLate
+                                      ? "border-red-500/30 bg-red-500/5 text-red-500 border-dashed"
+                                      : "bg-card border-border border-dashed text-muted-foreground",
+                                  )}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openModal(sub);
+                                  }}
+                                >
+                                  {/* AQUI USAMOS getCategoryColor TAMBIEN */}
                                   <div
-                                    className="w-1.5 h-1.5 rounded-full shrink-0"
+                                    className="w-1 h-3 rounded-full shrink-0"
                                     style={{
                                       backgroundColor: getCategoryColor(
                                         sub.category,
                                       ),
                                     }}
                                   />
-                                  <span className="text-[10px] font-medium text-foreground truncate group-hover:text-primary">
-                                    {sub.name}
-                                  </span>
+
+                                  {isLate ? (
+                                    <AlertCircle className="w-3 h-3 shrink-0" />
+                                  ) : (
+                                    <Clock className="w-3 h-3 shrink-0" />
+                                  )}
+
+                                  <div className="flex flex-col min-w-0 flex-1">
+                                    <span className="font-medium truncate leading-tight">
+                                      {sub.name}
+                                    </span>
+                                    <span className="font-mono opacity-70 leading-tight">
+                                      {formatCurrency(sub.price, sub.currency)}
+                                    </span>
+                                  </div>
                                 </div>
                               </TooltipTrigger>
                               <TooltipContent>
                                 <p className="font-bold">
-                                  Projected: {sub.name}
+                                  {isLate
+                                    ? "Overdue / Pending"
+                                    : "Projected Payment"}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  Click to log payment
                                 </p>
                               </TooltipContent>
                             </Tooltip>
@@ -223,6 +287,7 @@ export function CalendarView({ subscriptions, payments }: Props) {
   );
 }
 
+// Ahora sí se usa en la línea 170 y 216
 function getCategoryColor(category: string) {
   switch (category) {
     case "Entertainment":
@@ -234,6 +299,6 @@ function getCategoryColor(category: string) {
     case "Health":
       return "#10b981";
     default:
-      return "#71717a";
+      return "#a1a1aa";
   }
 }

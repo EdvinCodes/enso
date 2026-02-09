@@ -1,5 +1,5 @@
 export type Currency = "EUR" | "USD" | "GBP";
-export type BillingCycle = "monthly" | "yearly" | "weekly";
+export type BillingCycle = "monthly" | "yearly" | "weekly" | "one_time";
 export type SubscriptionCategory =
   | "Entertainment"
   | "Software"

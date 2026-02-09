@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { PiggyBank, Save, RotateCcw } from "lucide-react";
 import { useSubscriptionStore } from "@/features/subscriptions/store/subscription.store";
 import { SubscriptionCategory } from "@/types";
-import { toast } from "sonner"; // <--- TOQUE FINAL
+import { toast } from "sonner";
 
 const CATEGORIES: SubscriptionCategory[] = [
   "Entertainment",
@@ -19,19 +19,36 @@ const CATEGORIES: SubscriptionCategory[] = [
 ];
 
 export function BudgetsManager() {
+  // 1. CORRECCIÓN NOMBRE: Usamos 'updateBudget' que es como se llama en tu store
   const { budgets, updateBudget } = useSubscriptionStore();
 
-  // Estado local para el formulario (para no machacar el store en cada tecla)
   const [localBudgets, setLocalBudgets] =
     useState<Record<string, number>>(budgets);
   const [hasChanges, setHasChanges] = useState(false);
 
-  // Sincronizar estado local si el store cambia externamente
+  // 2. CORRECCIÓN USE EFFECT (Cascading Renders Fix):
+  // Comparamos el contenido (JSON) en lugar de la referencia del objeto.
+  // Solo actualizamos si NO hay cambios pendientes por el usuario Y los datos son distintos.
   useEffect(() => {
-    setLocalBudgets(budgets);
-  }, [budgets]);
+    const storeBudgetsStr = JSON.stringify(budgets);
+    const localBudgetsStr = JSON.stringify(localBudgets);
+
+    if (!hasChanges && storeBudgetsStr !== localBudgetsStr) {
+      setLocalBudgets(budgets);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [budgets, hasChanges]);
+  // Quitamos localBudgets del array de dependencias para evitar el bucle,
+  // ya que lo controlamos con la comparación JSON.
 
   const handleInputChange = (category: string, value: string) => {
+    // Permitir borrar el input (string vacío)
+    if (value === "") {
+      setLocalBudgets((prev) => ({ ...prev, [category]: 0 }));
+      setHasChanges(true);
+      return;
+    }
+
     const numValue = parseFloat(value);
     setLocalBudgets((prev) => ({
       ...prev,
@@ -41,12 +58,12 @@ export function BudgetsManager() {
   };
 
   const handleSave = async () => {
-    // PREMIUM: Feedback visual al guardar presupuestos
     toast.promise(
       async () => {
-        // Guardamos cada categoría que haya cambiado
+        // Guardamos cada categoría
         const promises = CATEGORIES.map(async (cat) => {
           const limit = localBudgets[cat] || 0;
+          // Solo llamamos a la API si el valor es diferente al del store
           if (limit !== budgets[cat]) {
             await updateBudget(cat, limit);
           }
@@ -85,7 +102,6 @@ export function BudgetsManager() {
           </div>
         </div>
 
-        {/* Botones de Acción (Solo aparecen si hay cambios) */}
         {hasChanges && (
           <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4">
             <Button variant="ghost" size="sm" onClick={handleReset}>
@@ -105,14 +121,18 @@ export function BudgetsManager() {
               {category}
             </Label>
             <div className="relative">
-              <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-mono pointer-events-none">
                 €
               </span>
               <Input
                 type="number"
+                min="0"
+                step="10"
                 placeholder="0.00"
                 className="pl-7 bg-background/50 border-border focus-visible:ring-amber-500"
-                value={localBudgets[category] || ""}
+                value={
+                  localBudgets[category] === 0 ? "" : localBudgets[category]
+                }
                 onChange={(e) => handleInputChange(category, e.target.value)}
               />
             </div>
