@@ -88,6 +88,10 @@ interface SubscriptionState {
     data: Partial<Subscription>,
   ) => Promise<void>;
 
+  // --- NUEVAS ACCIONES DATA / BACKUP ---
+  bulkAddSubscriptions: (subs: Partial<Subscription>[]) => Promise<void>;
+  hardResetData: () => Promise<void>;
+
   // History / Payments
   fetchHistory: () => Promise<void>;
   logPayment: (data: NewPaymentData) => Promise<void>;
@@ -361,6 +365,55 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
       .eq("id", id);
     if (error) throw error;
     await get().fetchSubscriptions();
+  },
+
+  bulkAddSubscriptions: async (subs) => {
+    const user = get().user;
+    if (!user) throw new Error("Not authenticated");
+
+    const dbPayload = subs.map((sub) => ({
+      user_id: user.id,
+      name: sub.name,
+      price: sub.price,
+      currency: sub.currency || "EUR",
+      billing_cycle: sub.billingCycle || "monthly",
+      category: sub.category || "Other",
+      start_date: sub.startDate
+        ? new Date(sub.startDate).toISOString()
+        : new Date().toISOString(),
+      next_payment_date: sub.nextPaymentDate
+        ? new Date(sub.nextPaymentDate).toISOString()
+        : new Date().toISOString(),
+      workspace: sub.workspace || get().currentWorkspace,
+      active: sub.active !== undefined ? sub.active : true,
+    }));
+
+    const { error } = await supabase.from("subscriptions").insert(dbPayload);
+    if (error) {
+      console.error(error);
+      throw error;
+    }
+
+    await get().fetchSubscriptions();
+  },
+
+  hardResetData: async () => {
+    const user = get().user;
+    if (!user) throw new Error("Not authenticated");
+
+    // 1. Borramos todo el historial de pagos para evitar errores de claves foráneas
+    await supabase.from("payments").delete().eq("user_id", user.id);
+
+    // 2. Borramos permanentemente todas las suscripciones
+    const { error } = await supabase
+      .from("subscriptions")
+      .delete()
+      .eq("user_id", user.id);
+    if (error) throw error;
+
+    // 3. Limpiamos el estado local
+    set({ subscriptions: [], payments: [], budgets: {} });
+    if (typeof window !== "undefined") localStorage.removeItem("enso_budgets");
   },
 
   signOut: async () => {

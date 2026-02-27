@@ -20,19 +20,20 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { CsvImporter } from "./components/CsvImporter";
 import { BudgetsManager } from "./BudgetsManager";
-import { exportData, importData, clearAllData } from "@/lib/data";
+import { exportData, importData } from "@/lib/data";
 import { useSubscriptionStore } from "@/features/subscriptions/store/subscription.store";
 import { toast } from "sonner";
 
 export function SettingsView() {
-  const { fetchSubscriptions, user } = useSubscriptionStore();
+  const { user, subscriptions, bulkAddSubscriptions, hardResetData } =
+    useSubscriptionStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importStatus, setImportStatus] = useState<
     "idle" | "success" | "error"
   >("idle");
 
   const handleExport = async () => {
-    await exportData();
+    exportData(subscriptions); // Le pasamos los datos del store
     toast.success("Backup exported", {
       description: "Keep this JSON file safe!",
       icon: <Download className="w-4 h-4" />,
@@ -49,11 +50,11 @@ export function SettingsView() {
 
     toast.promise(
       async () => {
-        const count = await importData(file);
-        await fetchSubscriptions();
+        const validItems = await importData(file);
+        await bulkAddSubscriptions(validItems); // Subimos todo a Supabase
         setImportStatus("success");
         setTimeout(() => setImportStatus("idle"), 3000);
-        return count;
+        return validItems.length;
       },
       {
         loading: "Restoring backup...",
@@ -70,18 +71,17 @@ export function SettingsView() {
 
   const handleClearData = async () => {
     toast("Factory Reset?", {
-      description: "This creates a clean slate. Local data will be wiped.",
+      description: "This creates a clean slate. Cloud data will be wiped.",
       action: {
         label: "Confirm Reset",
         onClick: async () => {
-          await clearAllData();
-          await fetchSubscriptions();
-          toast.success("All data cleared");
+          await hardResetData(); // Borra Supabase y el Store local
+          toast.success("All data cleared permanently");
         },
       },
       cancel: {
         label: "Cancel",
-        onClick: () => {}, // <--- Fix del error de tipos de Sonner
+        onClick: () => {},
       },
     });
   };

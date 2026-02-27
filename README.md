@@ -23,9 +23,6 @@
     <a href="https://web.dev/progressive-web-apps/">
       <img src="https://img.shields.io/badge/PWA-Ready-purple?style=flat-square&logo=pwa" alt="PWA Ready" />
     </a>
-    <a href="https://dexie.org/">
-      <img src="https://img.shields.io/badge/IndexedDB-Local-green?style=flat-square" alt="Local First" />
-    </a>
   </p>
 </div>
 

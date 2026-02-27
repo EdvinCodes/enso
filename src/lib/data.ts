@@ -1,13 +1,11 @@
-import { db } from "./db";
 import { Subscription } from "@/types";
 
 /**
- * Exporta todas las suscripciones a un archivo JSON
+ * Exporta el array de suscripciones a un archivo JSON
  */
-export async function exportData() {
+export function exportData(subscriptions: Subscription[]) {
   try {
-    const data = await db.subscriptions.toArray();
-    const jsonString = JSON.stringify(data, null, 2);
+    const jsonString = JSON.stringify(subscriptions, null, 2);
     const blob = new Blob([jsonString], { type: "application/json" });
     const url = URL.createObjectURL(blob);
 
@@ -17,6 +15,7 @@ export async function exportData() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url); // Limpieza de memoria
   } catch (error) {
     console.error("Export failed:", error);
     throw new Error("Failed to export data");
@@ -24,33 +23,31 @@ export async function exportData() {
 }
 
 /**
- * Importa datos desde un archivo JSON y los fusiona con la DB actual
+ * Lee un archivo JSON y devuelve un array de suscripciones válidas
  */
-export async function importData(file: File): Promise<number> {
+export async function importData(file: File): Promise<Partial<Subscription>[]> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
     reader.onload = async (event) => {
       try {
         const json = event.target?.result as string;
-        const data = JSON.parse(json) as Subscription[];
+        const data = JSON.parse(json) as Partial<Subscription>[];
 
         if (!Array.isArray(data)) {
           throw new Error("Invalid format: Expected an array of subscriptions");
         }
 
-        // Validación básica: verificar si tienen id, name, price
+        // Validación básica
         const validItems = data.filter(
-          (item) => item.id && item.name && typeof item.price === "number",
+          (item) => item.name && typeof item.price === "number",
         );
 
         if (validItems.length === 0) {
           throw new Error("No valid subscriptions found in file");
         }
 
-        // Usamos bulkPut para actualizar existentes o crear nuevas (Upsert)
-        await db.subscriptions.bulkPut(validItems);
-        resolve(validItems.length);
+        resolve(validItems);
       } catch (error) {
         reject(error);
       }
@@ -59,11 +56,4 @@ export async function importData(file: File): Promise<number> {
     reader.onerror = () => reject(new Error("Failed to read file"));
     reader.readAsText(file);
   });
-}
-
-/**
- * Borra todo (Danger Zone)
- */
-export async function clearAllData() {
-  await db.subscriptions.clear();
 }
