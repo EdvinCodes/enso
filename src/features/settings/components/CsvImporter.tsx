@@ -27,7 +27,7 @@ export function CsvImporter() {
     [],
   );
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const { addSubscription } = useSubscriptionStore();
+  const { bulkAddSubscriptions } = useSubscriptionStore();
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -76,25 +76,28 @@ export function CsvImporter() {
       return;
     }
 
-    // 3. Importación con Promise Toast (Premium Feel)
+    // 3. Importación con Promise Toast usando Bulk Insert
     toast.promise(
       async () => {
-        for (const item of toImport) {
-          // Intentamos encontrar metadatos del preset (color, categoría)
+        // Mapeamos los items seleccionados a objetos de suscripción
+        const subscriptionsToCreate = toImport.map((item) => {
           const preset = PRESET_SERVICES.find((p) => p.name === item.name);
 
-          await addSubscription({
+          return {
             name: item.name,
             price: item.price,
             currency: item.currency,
             startDate: new Date(), // Empieza hoy por defecto
-            billingCycle: "monthly",
+            billingCycle: "monthly" as const,
             category: preset
               ? (preset.category as SubscriptionCategory)
               : "Other",
-            workspace: "personal",
-          });
-        }
+            workspace: "personal" as const,
+          };
+        });
+
+        // Hacemos UNA SOLA llamada a Supabase en lugar de un bucle for...of
+        await bulkAddSubscriptions(subscriptionsToCreate);
       },
       {
         loading: "Importing to your dashboard...",
