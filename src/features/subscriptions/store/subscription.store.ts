@@ -92,6 +92,10 @@ interface SubscriptionState {
   bulkAddSubscriptions: (subs: Partial<Subscription>[]) => Promise<void>;
   hardResetData: () => Promise<void>;
 
+  archivedSubscriptions: Subscription[];
+  fetchArchivedSubscriptions: () => Promise<void>;
+  restoreSubscription: (id: string) => Promise<void>;
+
   // History / Payments
   fetchHistory: () => Promise<void>;
   logPayment: (data: NewPaymentData) => Promise<void>;
@@ -102,6 +106,7 @@ interface SubscriptionState {
 
 export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
   subscriptions: [],
+  archivedSubscriptions: [],
   payments: [], // <--- Inicializamos vacío
   isLoading: true,
   currentView: "overview",
@@ -414,6 +419,63 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
     // 3. Limpiamos el estado local
     set({ subscriptions: [], payments: [], budgets: {} });
     if (typeof window !== "undefined") localStorage.removeItem("enso_budgets");
+  },
+
+  // --- ARCHIVE ACTIONS ---
+  fetchArchivedSubscriptions: async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("subscriptions")
+        .select("*")
+        .eq("active", false) // Solo las borradas
+        .order("archived_at", { ascending: false });
+
+      if (error) throw error;
+
+      const mapped = (data as unknown as DbSubscription[]).map((item) => ({
+        id: item.id,
+        name: item.name,
+        price: Number(item.price),
+        currency: item.currency as Currency,
+        billingCycle: item.billing_cycle as Subscription["billingCycle"],
+        category: item.category as SubscriptionCategory,
+        startDate: new Date(item.start_date),
+        nextPaymentDate: new Date(item.next_payment_date || item.start_date),
+        active: item.active,
+        workspace: (item.workspace as WorkspaceType) || "personal",
+      }));
+
+      set({ archivedSubscriptions: mapped });
+    } catch (error) {
+      console.error("Error fetching archived:", error);
+    }
+  },
+
+  restoreSubscription: async (id) => {
+    const { error } = await supabase
+      .from("subscriptions")
+      .update({
+        active: true,
+        archived_at: null,
+      })
+      .eq("id", id);
+
+    if (error) {
+      toast.error("Failed to restore subscription");
+      throw error;
+    }
+
+    toast.success("Subscription restored!");
+    // Actualizamos ambas listas
+    await Promise.all([
+      get().fetchSubscriptions(),
+      get().fetchArchivedSubscriptions(),
+    ]);
   },
 
   signOut: async () => {

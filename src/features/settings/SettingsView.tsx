@@ -12,6 +12,7 @@ import {
   User,
   Settings as SettingsIcon,
   Database,
+  ArchiveRestore,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { CsvImporter } from "./components/CsvImporter";
 import { BudgetsManager } from "./BudgetsManager";
+import { ArchiveManager } from "./components/ArchiveManager";
 import { exportData, importData } from "@/lib/data";
 import { useSubscriptionStore } from "@/features/subscriptions/store/subscription.store";
 import { toast } from "sonner";
@@ -119,6 +121,18 @@ export function SettingsView() {
 
         {/* --- TAB 2: DATA (Import/Export) --- */}
         <TabsContent value="data" className="mt-6 space-y-6">
+          {/* NUEVO: Archive Manager */}
+          <div className="space-y-3">
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <ArchiveRestore className="w-5 h-5 text-muted-foreground" />
+              Archived Items
+            </h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Recover previously deleted subscriptions.
+            </p>
+            <ArchiveManager />
+          </div>
+
           {/* Bank Import Card */}
           <Card className="p-6 bg-card/40 border-border backdrop-blur-md">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
