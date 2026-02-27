@@ -3,8 +3,9 @@
 import { useMemo, useState } from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { Card } from "@/components/ui/card";
-import { Subscription, Payment, Currency } from "@/types"; // <--- Importamos Currency
-import { convertToEur } from "@/lib/currency";
+import { Subscription, Payment, Currency } from "@/types";
+import { convertCurrency, formatCurrency } from "@/lib/currency";
+import { useSubscriptionStore } from "@/features/subscriptions/store/subscription.store";
 import { isSameMonth, parseISO } from "date-fns";
 
 interface Props {
@@ -23,48 +24,49 @@ const COLORS = [
 
 export function CategoryDistribution({ subscriptions, payments }: Props) {
   const [activeIndex, setActiveIndex] = useState<number | undefined>();
+  const { baseCurrency } = useSubscriptionStore();
 
   const data = useMemo(() => {
     const map = new Map<string, number>();
     const now = new Date();
 
     subscriptions.forEach((sub) => {
-      // 1. Buscamos si hay un pago REAL este mes para esta suscripción
       const realPayment = payments.find(
         (p) =>
           p.subscription_id === sub.id &&
           isSameMonth(parseISO(p.payment_date), now),
       );
 
-      let amountInEur = 0;
+      let amountInBase = 0;
 
       if (realPayment) {
-        // CASO A: Ya se pagó este mes
-        if (realPayment.status === "skipped") {
-          amountInEur = 0;
-        } else {
-          // FIX: Forzamos el tipo con "as Currency" para que TypeScript no se queje
-          amountInEur = convertToEur(
+        if (realPayment.status !== "skipped") {
+          // CONVERTIMOS A LA MONEDA BASE ELEGIDA
+          amountInBase = convertCurrency(
             realPayment.amount,
             realPayment.currency as Currency,
+            baseCurrency,
           );
         }
       } else {
-        // CASO B: Proyección teórica
-        let monthlyPrice = convertToEur(sub.price, sub.currency);
+        let monthlyPrice = convertCurrency(
+          sub.price,
+          sub.currency,
+          baseCurrency,
+        ); // <--- AQUI TAMBIEN
         if (sub.billingCycle === "yearly") monthlyPrice /= 12;
         if (sub.billingCycle === "weekly") monthlyPrice *= 4;
-        amountInEur = monthlyPrice;
+        amountInBase = monthlyPrice;
       }
 
       const current = map.get(sub.category) || 0;
-      map.set(sub.category, current + amountInEur);
+      map.set(sub.category, current + amountInBase);
     });
 
     return Array.from(map.entries())
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value);
-  }, [subscriptions, payments]);
+  }, [subscriptions, payments, baseCurrency]);
 
   if (data.length === 0 || data.every((d) => d.value === 0)) return null;
 
@@ -141,9 +143,10 @@ export function CategoryDistribution({ subscriptions, payments }: Props) {
                   fontSize: "12px",
                   fontWeight: 500,
                 }}
-                formatter={(
-                  value: number | string | Array<number | string> | undefined,
-                ) => [`${Number(value || 0).toFixed(2)} €`, "Monthly"]}
+                formatter={(value: number | undefined) => [
+                  formatCurrency(value || 0, baseCurrency),
+                  "Monthly",
+                ]}
               />
             </PieChart>
           </ResponsiveContainer>
@@ -176,7 +179,7 @@ export function CategoryDistribution({ subscriptions, payments }: Props) {
               </span>
             </div>
             <span className="font-mono text-muted-foreground shrink-0">
-              {entry.value.toFixed(0)}€
+              {formatCurrency(entry.value, baseCurrency)}
             </span>
           </div>
         ))}

@@ -1,5 +1,6 @@
 import { Subscription } from "@/types";
-import { convertToEur } from "./currency";
+import { convertCurrency } from "./currency";
+import { Currency } from "@/types";
 import { addDays, format, isAfter, startOfDay } from "date-fns";
 
 export interface ForecastDataPoint {
@@ -13,18 +14,16 @@ export interface ForecastDataPoint {
 export function generateForecast(
   subscriptions: Subscription[],
   daysToForecast = 30,
+  baseCurrency: Currency = "EUR", // <--- AÑADIMOS EL PARÁMETRO
 ): ForecastDataPoint[] {
   const today = startOfDay(new Date());
   const data: ForecastDataPoint[] = [];
   let accumulated = 0;
 
-  // FILTRO CRÍTICO: Solo proyectamos gastos RECURRENTES activos.
-  // Los gastos 'one_time' no se proyectan al futuro.
   const recurringSubs = subscriptions.filter(
     (sub) => sub.active && sub.billingCycle !== "one_time",
   );
 
-  // Iteramos día a día
   for (let i = 0; i <= daysToForecast; i++) {
     const currentDate = addDays(today, i);
     let dailyTotal = 0;
@@ -32,8 +31,8 @@ export function generateForecast(
 
     recurringSubs.forEach((sub) => {
       const startDate = new Date(sub.startDate);
-      // Normalizar precio a EUR
-      const price = convertToEur(sub.price, sub.currency);
+      // USAMOS LA NUEVA FUNCIÓN DE CONVERSIÓN AQUÍ:
+      const price = convertCurrency(sub.price, sub.currency, baseCurrency);
 
       if (doesSubscriptionHitDate(sub, startDate, currentDate)) {
         dailyTotal += price;

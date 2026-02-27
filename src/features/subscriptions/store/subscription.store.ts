@@ -65,6 +65,8 @@ interface SubscriptionState {
   subscriptionToEdit: Subscription | undefined;
   budgets: Budgets;
   user: User | null;
+  baseCurrency: Currency;
+  setBaseCurrency: (currency: Currency) => void;
 
   // --- ACTIONS ---
   setView: (view: "overview" | "calendar" | "settings") => void;
@@ -115,6 +117,14 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
   subscriptionToEdit: undefined,
   budgets: {},
   user: null,
+  baseCurrency: "EUR", // <--- NUEVO
+
+  setBaseCurrency: (currency) => {
+    set({ baseCurrency: currency });
+    if (typeof window !== "undefined") {
+      localStorage.setItem("enso_base_currency", currency);
+    }
+  },
 
   setView: (view) => set({ currentView: view }),
   setWorkspace: (workspace) => set({ currentWorkspace: workspace }),
@@ -190,14 +200,26 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
 
       // Cargar presupuestos locales
       let loadedBudgets: Budgets = {};
+      let loadedCurrency: Currency = "EUR";
+
       if (typeof window !== "undefined") {
-        const saved = localStorage.getItem("enso_budgets");
-        if (saved) loadedBudgets = JSON.parse(saved);
+        const savedBudgets = localStorage.getItem("enso_budgets");
+        if (savedBudgets) loadedBudgets = JSON.parse(savedBudgets);
+
+        const savedCurrency = localStorage.getItem("enso_base_currency");
+        if (
+          savedCurrency === "EUR" ||
+          savedCurrency === "USD" ||
+          savedCurrency === "GBP"
+        ) {
+          loadedCurrency = savedCurrency as Currency;
+        }
       }
 
       set({
         subscriptions: mappedSubscriptions,
         budgets: loadedBudgets,
+        baseCurrency: loadedCurrency,
         isLoading: false,
         user,
       });

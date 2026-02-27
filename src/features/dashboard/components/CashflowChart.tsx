@@ -15,14 +15,20 @@ import {
 } from "recharts";
 import { formatCurrency } from "@/lib/currency";
 import { TrendingUp, LineChart, CalendarClock } from "lucide-react";
+import { useSubscriptionStore } from "@/features/subscriptions/store/subscription.store";
 
 interface Props {
   subscriptions: Subscription[];
 }
 
 export function CashflowChart({ subscriptions }: Props) {
+  const { baseCurrency } = useSubscriptionStore();
+
   // Generamos el forecast solo con suscripciones recurrentes (ya filtrado en generateForecast)
-  const data = useMemo(() => generateForecast(subscriptions), [subscriptions]);
+  const data = useMemo(
+    () => generateForecast(subscriptions, 30, baseCurrency),
+    [subscriptions, baseCurrency],
+  );
 
   const totalForecast = data[data.length - 1]?.accumulated || 0;
   const isEmpty =
@@ -45,7 +51,7 @@ export function CashflowChart({ subscriptions }: Props) {
             <CalendarClock className="w-3 h-3" /> Next 30 Days
           </div>
           <p className="text-2xl font-bold text-foreground font-mono tracking-tight">
-            {formatCurrency(totalForecast)}
+            {formatCurrency(totalForecast, baseCurrency)}
           </p>
         </div>
       </div>
@@ -104,7 +110,9 @@ export function CashflowChart({ subscriptions }: Props) {
                 tick={{ fill: "currentColor", fontSize: 10, opacity: 0.5 }}
                 tickLine={false}
                 axisLine={false}
-                tickFormatter={(val) => `€${val}`}
+                tickFormatter={(val) =>
+                  formatCurrency(val, baseCurrency).replace(/\.\d+/, "")
+                }
                 className="text-muted-foreground"
               />
               <Tooltip
@@ -122,7 +130,10 @@ export function CashflowChart({ subscriptions }: Props) {
                               Accumulated:
                             </span>
                             <span className="text-emerald-500 font-mono font-bold">
-                              {formatCurrency(dataPoint.accumulated)}
+                              {formatCurrency(
+                                dataPoint.accumulated,
+                                baseCurrency,
+                              )}
                             </span>
                           </div>
 

@@ -13,6 +13,7 @@ import {
   Settings as SettingsIcon,
   Database,
   ArchiveRestore,
+  Globe,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,10 +26,25 @@ import { ArchiveManager } from "./components/ArchiveManager";
 import { exportData, importData } from "@/lib/data";
 import { useSubscriptionStore } from "@/features/subscriptions/store/subscription.store";
 import { toast } from "sonner";
+import { Currency } from "@/types";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 
 export function SettingsView() {
-  const { user, subscriptions, bulkAddSubscriptions, hardResetData } =
-    useSubscriptionStore();
+  const {
+    user,
+    subscriptions,
+    bulkAddSubscriptions,
+    hardResetData,
+    baseCurrency,
+    setBaseCurrency,
+  } = useSubscriptionStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importStatus, setImportStatus] = useState<
     "idle" | "success" | "error"
@@ -116,6 +132,45 @@ export function SettingsView() {
 
         {/* --- TAB 1: GENERAL (Budgets) --- */}
         <TabsContent value="general" className="mt-6 space-y-6">
+          {/* NUEVO: Preferencias Globales (Moneda) */}
+          <Card className="p-6 bg-card/40 border-border backdrop-blur-md">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-4">
+                <div className="p-3 bg-primary/10 rounded-xl text-primary">
+                  <Globe className="w-6 h-6" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-lg font-semibold text-foreground">
+                    Global Preferences
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Choose your default base currency for all dashboard
+                    calculations.
+                  </p>
+                </div>
+              </div>
+
+              <div className="w-full sm:w-[150px]">
+                <Label className="text-xs text-muted-foreground mb-2 block">
+                  Base Currency
+                </Label>
+                <Select
+                  value={baseCurrency}
+                  onValueChange={(val) => setBaseCurrency(val as Currency)}
+                >
+                  <SelectTrigger className="bg-background/50">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="EUR">🇪🇺 EUR (€)</SelectItem>
+                    <SelectItem value="USD">🇺🇸 USD ($)</SelectItem>
+                    <SelectItem value="GBP">🇬🇧 GBP (£)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </Card>
+
           <BudgetsManager />
         </TabsContent>
 

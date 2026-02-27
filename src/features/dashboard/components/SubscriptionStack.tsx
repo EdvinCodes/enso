@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Subscription } from "@/types";
+import { Subscription, Currency } from "@/types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronUp, Layers } from "lucide-react";
-import { convertToEur } from "@/lib/currency";
+import { convertCurrency, formatCurrency } from "@/lib/currency";
+import { useSubscriptionStore } from "@/features/subscriptions/store/subscription.store";
 import { cn } from "@/lib/utils";
 import { SubscriptionCard } from "@/features/subscriptions/components/SubscriptionCard";
 
@@ -23,9 +24,15 @@ export function SubscriptionStack({
   onLogPayment,
 }: Props) {
   const [isOpen, setIsOpen] = useState(false);
+  const { baseCurrency } = useSubscriptionStore();
 
+  // Recalculamos el total usando convertCurrency
   const stackTotal = subscriptions.reduce((acc, sub) => {
-    let price = convertToEur(sub.price, sub.currency);
+    let price = convertCurrency(
+      sub.price,
+      sub.currency as Currency,
+      baseCurrency,
+    ); // <-- APLICAMOS LA CONVERSIÓN
     if (sub.billingCycle === "yearly") price /= 12;
     if (sub.billingCycle === "weekly") price *= 4;
     return acc + price;
@@ -68,11 +75,8 @@ export function SubscriptionStack({
           <div className="flex items-center gap-3 sm:gap-5 shrink-0">
             <div className="text-right">
               <div className="font-mono text-base sm:text-lg font-bold text-foreground leading-tight">
-                {new Intl.NumberFormat("es-ES", {
-                  style: "currency",
-                  currency: "EUR",
-                  maximumFractionDigits: 0,
-                }).format(stackTotal)}
+                {/* Usamos el formateador global que se adapta a la moneda */}
+                {formatCurrency(stackTotal, baseCurrency)}
               </div>
               <div className="text-[10px] text-muted-foreground uppercase font-medium">
                 Monthly

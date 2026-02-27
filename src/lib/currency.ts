@@ -77,19 +77,6 @@ export async function refreshExchangeRates(): Promise<boolean> {
 }
 
 /**
- * Convierte cualquier monto a EUR usando las tasas actuales
- */
-export function convertToEur(amount: number, fromCurrency: Currency): number {
-  const rate = currentRates[fromCurrency];
-  // Si algo falla catastróficamente, devolvemos el monto tal cual
-  if (!rate) return amount;
-
-  // Como la base es EUR, dividimos por la tasa
-  // Ej: 10 USD / 1.09 = 9.17 EUR
-  return amount / rate;
-}
-
-/**
  * Devuelve la tasa actual para mostrarla en la UI si quieres
  */
 export function getRate(currency: Currency): number {
@@ -97,10 +84,31 @@ export function getRate(currency: Currency): number {
 }
 
 /**
- * Formateador universal
+ * Convierte cualquier monto de una moneda a la moneda destino del usuario
+ */
+export function convertCurrency(
+  amount: number,
+  fromCurrency: Currency,
+  toCurrency: Currency,
+): number {
+  if (fromCurrency === toCurrency) return amount;
+
+  const fromRate = currentRates[fromCurrency] || FALLBACK_RATES[fromCurrency];
+  const toRate = currentRates[toCurrency] || FALLBACK_RATES[toCurrency];
+
+  // 1. Convertimos a la base neutral (EUR)
+  const amountInEur = amount / fromRate;
+  // 2. Convertimos a la moneda destino
+  return amountInEur * toRate;
+}
+
+/**
+ * Formateador universal inteligente (adapta el símbolo y el formato al país)
  */
 export const formatCurrency = (amount: number, currency: Currency = "EUR") => {
-  return new Intl.NumberFormat("es-ES", {
+  const locale =
+    currency === "USD" ? "en-US" : currency === "GBP" ? "en-GB" : "es-ES";
+  return new Intl.NumberFormat(locale, {
     style: "currency",
     currency: currency,
     minimumFractionDigits: 2,

@@ -28,7 +28,8 @@ import {
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-import { convertToEur, formatCurrency } from "@/lib/currency";
+import { convertCurrency, formatCurrency } from "@/lib/currency";
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CalendarView } from "@/features/calendar/CalendarView";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
@@ -66,6 +67,7 @@ export default function DashboardPage() {
     currentWorkspace,
     budgets,
     payments,
+    baseCurrency,
   } = useSubscriptionStore();
 
   const [isLogPaymentOpen, setIsLogPaymentOpen] = useState(false);
@@ -162,13 +164,16 @@ export default function DashboardPage() {
 
       if (realPayment) {
         if (realPayment.status === "paid") {
-          amount = convertToEur(
+          // CAMBIO AQUI
+          amount = convertCurrency(
             realPayment.amount,
             realPayment.currency as Currency,
+            baseCurrency,
           );
         }
       } else {
-        let price = convertToEur(sub.price, sub.currency);
+        // Y CAMBIO AQUI
+        let price = convertCurrency(sub.price, sub.currency, baseCurrency);
         if (sub.billingCycle === "yearly") price /= 12;
         if (sub.billingCycle === "weekly") price *= 4;
         amount = price;
@@ -300,7 +305,7 @@ export default function DashboardPage() {
                         </span>
                       </p>
                       <h2 className="text-4xl font-bold text-foreground tracking-tight">
-                        {formatCurrency(monthlyRunRate)}
+                        {formatCurrency(monthlyRunRate, baseCurrency)}
                       </h2>
                       <div className="flex flex-wrap gap-2 mt-4">
                         <div className="flex items-center gap-2 text-emerald-500 text-xs bg-emerald-500/10 w-fit px-2 py-1 rounded-full border border-emerald-500/20">
