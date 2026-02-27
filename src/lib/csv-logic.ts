@@ -33,6 +33,30 @@ export interface DetectedSubscription {
   originalDescription: string;
 }
 
+// Añadir esta función auxiliar antes de parseAndDetect:
+function extractDateFromRow(rowString: string): Date {
+  // Patrones comunes en extractos bancarios: YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY
+  const patterns = [
+    /(\d{4})-(\d{2})-(\d{2})/, // ISO: 2025-03-15
+    /(\d{2})\/(\d{2})\/(\d{4})/, // ES/EU: 15/03/2025
+    /(\d{2})-(\d{2})-(\d{4})/, // ES guiones: 15-03-2025
+  ];
+
+  for (const pattern of patterns) {
+    const match = rowString.match(pattern);
+    if (match) {
+      const parsed = new Date(
+        match[0]
+          .replace(/(\d{2})\/(\d{2})\/(\d{4})/, "$3-$2-$1")
+          .replace(/(\d{2})-(\d{2})-(\d{4})/, "$3-$2-$1"),
+      );
+      if (!isNaN(parsed.getTime())) return parsed;
+    }
+  }
+
+  return new Date(); // Fallback a hoy si no encuentra fecha
+}
+
 export function parseAndDetect(file: File): Promise<DetectedSubscription[]> {
   return new Promise((resolve, reject) => {
     Papa.parse(file, {
@@ -73,9 +97,9 @@ export function parseAndDetect(file: File): Promise<DetectedSubscription[]> {
                 detected.push({
                   id: `csv-${index}`,
                   name: matchedService,
-                  price: price,
+                  price,
                   currency: detectedCurrency,
-                  date: new Date(),
+                  date: extractDateFromRow(rowString), // ← fecha real del extracto
                   originalDescription: rowString.substring(0, 50) + "...",
                 });
               }

@@ -46,6 +46,13 @@ interface DbPayment {
   created_at: string;
 }
 
+interface DbBudget {
+  id: string;
+  userid: string;
+  category: string;
+  monthly_limit: number;
+}
+
 type NewSubscriptionData = Omit<
   Subscription,
   "id" | "active" | "createdAt" | "updatedAt" | "nextPaymentDate"
@@ -70,7 +77,8 @@ interface SubscriptionState {
 
   // --- ACTIONS ---
   setView: (view: "overview" | "calendar" | "settings") => void;
-  setWorkspace: (workspace: WorkspaceType) => void;
+  setWorkspace: (workspace: WorkspaceType) => Promise<void>;
+  fetchBudgets: () => Promise<void>;
   updateBudget: (
     category: SubscriptionCategory,
     limit: number,
@@ -97,6 +105,7 @@ interface SubscriptionState {
   archivedSubscriptions: Subscription[];
   fetchArchivedSubscriptions: () => Promise<void>;
   restoreSubscription: (id: string) => Promise<void>;
+  deleteArchivedSubscription: (id: string) => Promise<void>;
 
   // History / Payments
   fetchHistory: () => Promise<void>;
@@ -104,6 +113,8 @@ interface SubscriptionState {
   deletePayment: (paymentId: string) => Promise<void>;
 
   signOut: () => Promise<void>;
+
+  isAuthChecked: boolean;
 }
 
 export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
@@ -118,6 +129,7 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
   budgets: {},
   user: null,
   baseCurrency: "EUR", // <--- NUEVO
+  isAuthChecked: false,
 
   setBaseCurrency: (currency) => {
     set({ baseCurrency: currency });
@@ -127,43 +139,87 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
   },
 
   setView: (view) => set({ currentView: view }),
-  setWorkspace: (workspace) => set({ currentWorkspace: workspace }),
+  setWorkspace: async (workspace) => {
+    set({ currentWorkspace: workspace });
+    await get().fetchSubscriptions();
+  },
   openModal: (sub) => set({ isModalOpen: true, subscriptionToEdit: sub }),
   closeModal: () => set({ isModalOpen: false, subscriptionToEdit: undefined }),
 
   // --- AUTH CHECK ---
   checkAuth: async () => {
-    refreshExchangeRates();
-
+    await refreshExchangeRates();
     const {
       data: { user },
     } = await supabase.auth.getUser();
     set({ user });
+
     if (user) {
-      // Cargamos TODO: Suscripciones y Historial
-      await Promise.all([get().fetchSubscriptions(), get().fetchHistory()]);
+      await Promise.all([
+        get().fetchSubscriptions(),
+        get().fetchHistory(),
+        get().fetchBudgets(), // ← NUEVO
+      ]);
     } else {
-      set({ isLoading: false, subscriptions: [], payments: [] });
+      set({ isLoading: false, subscriptions: [], payments: [], budgets: {} });
     }
+
+    set({ isAuthChecked: true });
+  },
+
+  fetchBudgets: async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from("budgets")
+      .select("*")
+      .eq("userid", user.id);
+
+    if (error) {
+      console.error("Error fetching budgets", error);
+      return;
+    }
+
+    const mapped: Budgets = {};
+    (data as DbBudget[]).forEach((b) => {
+      mapped[b.category as SubscriptionCategory] = b.monthly_limit;
+    });
+
+    set({ budgets: mapped });
   },
 
   updateBudget: async (category, limit) => {
-    // Simulación optimista
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    set((state) => {
-      const newBudgets = { ...state.budgets, [category]: limit };
-      if (typeof window !== "undefined")
-        localStorage.setItem("enso_budgets", JSON.stringify(newBudgets));
-      return { budgets: newBudgets };
-    });
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { error } = await supabase.from("budgets").upsert(
+      {
+        userid: user.id,
+        category,
+        monthly_limit: limit,
+        updatedat: new Date().toISOString(),
+      },
+      { onConflict: "userid,category" }, // Si ya existe ese par, actualiza
+    );
+
+    if (error) {
+      console.error("Error saving budget", error);
+      throw error;
+    }
+
+    // Actualizar estado local directamente (sin re-fetch, más rápido)
+    set((state) => ({ budgets: { ...state.budgets, [category]: limit } }));
   },
 
   // --- CLOUD ACTIONS (SUPABASE) ---
 
-  // 1. FETCH SUBSCRIPTIONS
   fetchSubscriptions: async () => {
     set({ isLoading: true });
-
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -172,18 +228,21 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
       return;
     }
 
+    const currentWorkspace = get().currentWorkspace; // ← leemos el workspace actual
+
     try {
       const { data, error } = await supabase
         .from("subscriptions")
         .select("*")
-        .eq("active", true) // <--- IMPORTANTE: Solo traemos las activas para el dashboard principal
-        .order("created_at", { ascending: false });
+        .eq("active", true)
+        .eq("workspace", currentWorkspace) // ← filtro en DB, no en cliente
+        .order("createdat", { ascending: false });
 
       if (error) throw error;
 
-      const dbData = data as unknown as DbSubscription[];
-
-      const mappedSubscriptions: Subscription[] = dbData.map((item) => ({
+      const mappedSubscriptions: Subscription[] = (
+        data as DbSubscription[]
+      ).map((item) => ({
         id: item.id,
         name: item.name,
         price: Number(item.price),
@@ -191,22 +250,17 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
         billingCycle: item.billing_cycle as Subscription["billingCycle"],
         category: item.category as SubscriptionCategory,
         startDate: new Date(item.start_date),
-        nextPaymentDate: new Date(item.next_payment_date || item.start_date),
+        nextPaymentDate: new Date(item.next_payment_date ?? item.start_date),
         active: item.active,
-        workspace: (item.workspace as WorkspaceType) || "personal",
+        workspace: (item.workspace as WorkspaceType) ?? "personal",
         createdAt: new Date(item.created_at),
         updatedAt: new Date(item.updated_at),
       }));
 
-      // Cargar presupuestos locales
-      let loadedBudgets: Budgets = {};
+      // Cargar baseCurrency desde localStorage (esto sí puede seguir local)
       let loadedCurrency: Currency = "EUR";
-
       if (typeof window !== "undefined") {
-        const savedBudgets = localStorage.getItem("enso_budgets");
-        if (savedBudgets) loadedBudgets = JSON.parse(savedBudgets);
-
-        const savedCurrency = localStorage.getItem("enso_base_currency");
+        const savedCurrency = localStorage.getItem("ensobasecurrency");
         if (
           savedCurrency === "EUR" ||
           savedCurrency === "USD" ||
@@ -218,19 +272,16 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
 
       set({
         subscriptions: mappedSubscriptions,
-        budgets: loadedBudgets,
         baseCurrency: loadedCurrency,
         isLoading: false,
-        user,
       });
     } catch (error) {
-      console.error("Error fetching data:", error);
+      console.error("Error fetching subscriptions", error);
       toast.error("Failed to sync data");
       set({ isLoading: false });
     }
   },
 
-  // 2. FETCH HISTORY
   fetchHistory: async () => {
     const {
       data: { user },
@@ -241,17 +292,13 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
       const { data, error } = await supabase
         .from("payments")
         .select("*")
-        .order("payment_date", { ascending: false }); // Ordenamos por fecha de pago (más reciente arriba)
+        .eq("userid", user.id) // ← Filtro explícito (más seguro que depender solo de RLS)
+        .order("paymentdate", { ascending: false })
+        .limit(300); // ← Límite: cubre 25 años de pagos mensuales
 
       if (error) throw error;
 
-      const dbData = data as unknown as DbPayment[];
-
-      // Mapeamos de snake_case a camelCase (si fuera necesario, aunque Payment interface usa snake_case para simplificar)
-      // Como tu interfaz Payment en 'types' usa snake_case (user_id, payment_date),
-      // podemos usar el objeto directo, solo asegurando los tipos.
-
-      const mappedPayments: Payment[] = dbData.map((p) => ({
+      const mappedPayments: Payment[] = (data as DbPayment[]).map((p) => ({
         id: p.id,
         user_id: p.user_id,
         subscription_id: p.subscription_id,
@@ -260,16 +307,15 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
         payment_date: p.payment_date,
         status: p.status,
         notes: p.notes,
-        created_at: p.created_at,
+        createdat: p.created_at,
       }));
 
       set({ payments: mappedPayments });
     } catch (error) {
-      console.error("Error fetching history:", error);
+      console.error("Error fetching history", error);
     }
   },
 
-  // 3. LOG PAYMENT
   logPayment: async (paymentData) => {
     const user = get().user;
     if (!user) return;
@@ -279,14 +325,14 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
       subscription_id: paymentData.subscription_id,
       amount: paymentData.amount,
       currency: paymentData.currency,
-      payment_date: paymentData.payment_date, // Debe ser string YYYY-MM-DD
+      payment_date: paymentData.payment_date,
       status: paymentData.status,
       notes: paymentData.notes,
     };
 
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("payments")
-      .insert([dbPayload])
+      .insert(dbPayload)
       .select()
       .single();
 
@@ -296,11 +342,8 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
       return;
     }
 
-    // Actualizamos estado local
-    const newPayment = data as Payment;
-    set((state) => ({
-      payments: [newPayment, ...state.payments],
-    }));
+    // re-sincronizamos el historial para garantizar consistencia total
+    await get().fetchHistory();
 
     toast.success("Payment recorded");
   },
@@ -356,16 +399,30 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
   },
 
   deleteSubscription: async (id) => {
-    // SOFT DELETE: No borramos, marcamos como inactiva y ponemos fecha de archivo
+    // 1. Primero borramos los pagos asociados a esta suscripción
+    const { error: paymentsError } = await supabase
+      .from("payments")
+      .delete()
+      .eq("subscriptionid", id);
+
+    if (paymentsError) {
+      console.error("Error deleting payments for subscription:", paymentsError);
+      toast.error("Failed to archive subscription");
+      return;
+    }
+
+    // 2. Luego archivamos (soft delete) la suscripción
     const { error } = await supabase
       .from("subscriptions")
-      .update({
-        active: false,
-        archived_at: new Date().toISOString(),
-      })
+      .update({ active: false, archivedat: new Date().toISOString() })
       .eq("id", id);
 
     if (error) throw error;
+
+    // 3. Actualizamos el estado local limpiando también los pagos
+    set((state) => ({
+      payments: state.payments.filter((p) => p.subscription_id !== id),
+    }));
 
     await get().fetchSubscriptions();
     toast.success("Subscription archived");
@@ -428,19 +485,16 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
     const user = get().user;
     if (!user) throw new Error("Not authenticated");
 
-    // 1. Borramos todo el historial de pagos para evitar errores de claves foráneas
-    await supabase.from("payments").delete().eq("user_id", user.id);
-
-    // 2. Borramos permanentemente todas las suscripciones
+    await supabase.from("payments").delete().eq("userid", user.id);
+    await supabase.from("budgets").delete().eq("userid", user.id); // ← NUEVO
     const { error } = await supabase
       .from("subscriptions")
       .delete()
-      .eq("user_id", user.id);
+      .eq("userid", user.id);
     if (error) throw error;
 
-    // 3. Limpiamos el estado local
     set({ subscriptions: [], payments: [], budgets: {} });
-    if (typeof window !== "undefined") localStorage.removeItem("enso_budgets");
+    // Ya no hay nada que borrar de localStorage para budgets
   },
 
   // --- ARCHIVE ACTIONS ---
@@ -498,6 +552,27 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
       get().fetchSubscriptions(),
       get().fetchArchivedSubscriptions(),
     ]);
+  },
+
+  deleteArchivedSubscription: async (id: string) => {
+    // Cascade: pagos primero, luego la suscripción
+    await supabase.from("payments").delete().eq("subscriptionid", id);
+
+    const { error } = await supabase
+      .from("subscriptions")
+      .delete()
+      .eq("id", id);
+
+    if (error) throw error;
+
+    set((state) => ({
+      archivedSubscriptions: state.archivedSubscriptions.filter(
+        (s) => s.id !== id,
+      ),
+      payments: state.payments.filter((p) => p.subscription_id !== id),
+    }));
+
+    toast.success("Subscription permanently deleted");
   },
 
   signOut: async () => {

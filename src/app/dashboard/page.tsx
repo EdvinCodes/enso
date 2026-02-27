@@ -61,6 +61,7 @@ export default function DashboardPage() {
     deleteSubscription,
     signOut,
     isLoading,
+    isAuthChecked,
     currentView,
     setView,
     openModal,
@@ -87,10 +88,30 @@ export default function DashboardPage() {
   }, [checkAuth]);
 
   useEffect(() => {
-    if (!isLoading && !user) {
+    // Solo redirigimos cuando checkAuth ha terminado completamente
+    // Nunca antes, aunque isLoading baje momentáneamente
+    if (isAuthChecked && !user) {
       router.push("/login");
     }
-  }, [isLoading, user, router]);
+  }, [isAuthChecked, user, router]);
+
+  // En dashboard/page.tsx — añadir este useEffect
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "ensobasecurrency" && e.newValue) {
+        const validCurrencies = ["EUR", "USD", "GBP"];
+        if (validCurrencies.includes(e.newValue)) {
+          // Actualizamos el store directamente sin re-fetch
+          useSubscriptionStore.setState({
+            baseCurrency: e.newValue as Currency,
+          });
+        }
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, []);
 
   useSmartNotifications(subscriptions);
 
@@ -130,11 +151,7 @@ export default function DashboardPage() {
     setIsLogPaymentOpen(true);
   };
 
-  const workspaceSubs = subscriptions.filter((sub) => {
-    const subWorkspace = sub.workspace || "personal";
-    return subWorkspace === currentWorkspace;
-  });
-
+  const workspaceSubs = subscriptions;
   const recurringSubs = workspaceSubs.filter(
     (s) => s.billingCycle !== "one_time",
   );
@@ -193,7 +210,7 @@ export default function DashboardPage() {
     (cat) => (budgets[cat] || 0) > 0,
   );
 
-  if (isLoading || !user) {
+  if (isLoading || !isAuthChecked) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
