@@ -1,10 +1,7 @@
 import { Subscription } from "@/types";
+import { getNextPaymentDate } from "@/lib/dates";
 import {
   differenceInDays,
-  addMonths,
-  addYears,
-  addWeeks,
-  isBefore,
   startOfDay,
 } from "date-fns";
 
@@ -39,23 +36,6 @@ export function sendNotification(title: string, body: string, icon?: string) {
 }
 
 /**
- * FUNCIÓN AUXILIAR: Calcula la próxima fecha real de pago
- * (La misma lógica que pusimos en la Card)
- */
-function getRealNextPaymentDate(startDate: Date | string, cycle: string): Date {
-  const today = startOfDay(new Date());
-  let nextDate = startOfDay(new Date(startDate));
-
-  // Si la fecha es anterior a hoy, sumamos ciclos hasta alcanzar el futuro
-  while (isBefore(nextDate, today)) {
-    if (cycle === "monthly") nextDate = addMonths(nextDate, 1);
-    else if (cycle === "yearly") nextDate = addYears(nextDate, 1);
-    else if (cycle === "weekly") nextDate = addWeeks(nextDate, 1);
-  }
-  return nextDate;
-}
-
-/**
  * Filtra las suscripciones que vencen pronto (ej: en 3 días)
  */
 export function getUpcomingRenewals(
@@ -65,16 +45,9 @@ export function getUpcomingRenewals(
   const today = startOfDay(new Date());
 
   return subscriptions.filter((sub) => {
-    // 1. Calculamos la fecha REAL del próximo pago
-    const nextPayment = getRealNextPaymentDate(
-      sub.nextPaymentDate,
-      sub.billingCycle,
-    );
-
-    // 2. Calculamos la diferencia con la fecha proyectada
+    const nextPayment = getNextPaymentDate(sub);
     const daysLeft = differenceInDays(nextPayment, today);
 
-    // 3. Devolvemos las que vencen hoy (0) o pronto (<= threshold)
     return daysLeft >= 0 && daysLeft <= daysThreshold;
   });
 }

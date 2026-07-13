@@ -44,6 +44,7 @@ import { SettingsView } from "@/features/settings/SettingsView";
 import { BudgetProgress } from "@/features/subscriptions/components/BudgetProgress";
 import { CashflowChart } from "@/features/dashboard/components/CashflowChart";
 import { Subscription, SubscriptionCategory, Currency } from "@/types";
+import { BASE_CURRENCY_KEY } from "@/lib/supabase";
 import { toast } from "sonner";
 import { LogPaymentModal } from "@/components/log-payment-modal";
 import { isSameMonth, parseISO, format } from "date-fns";
@@ -98,7 +99,7 @@ export default function DashboardPage() {
   // En dashboard/page.tsx — añadir este useEffect
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === "ensobasecurrency" && e.newValue) {
+      if (e.key === BASE_CURRENCY_KEY && e.newValue) {
         const validCurrencies = ["EUR", "USD", "GBP"];
         if (validCurrencies.includes(e.newValue)) {
           // Actualizamos el store directamente sin re-fetch
@@ -373,7 +374,7 @@ export default function DashboardPage() {
                               current={current}
                               limit={limit}
                               label={cat}
-                              currency="EUR"
+                              currency={baseCurrency}
                             />
                           );
                         })}

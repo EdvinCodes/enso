@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { PiggyBank, Save, RotateCcw } from "lucide-react";
 import { useSubscriptionStore } from "@/features/subscriptions/store/subscription.store";
 import { SubscriptionCategory } from "@/types";
+import { getCurrencySymbol } from "@/lib/currency";
 import { toast } from "sonner";
 
 const CATEGORIES: SubscriptionCategory[] = [
@@ -20,7 +21,7 @@ const CATEGORIES: SubscriptionCategory[] = [
 
 export function BudgetsManager() {
   // 1. CORRECCIÓN NOMBRE: Usamos 'updateBudget' que es como se llama en tu store
-  const { budgets, updateBudget } = useSubscriptionStore();
+  const { budgets, updateBudget, baseCurrency } = useSubscriptionStore();
 
   const [localBudgets, setLocalBudgets] =
     useState<Record<string, number>>(budgets);
@@ -122,7 +123,7 @@ export function BudgetsManager() {
             </Label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-mono pointer-events-none">
-                €
+                {getCurrencySymbol(baseCurrency)}
               </span>
               <Input
                 type="number"

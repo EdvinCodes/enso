@@ -102,6 +102,16 @@ export function convertCurrency(
   return amountInEur * toRate;
 }
 
+export function getCurrencySymbol(currency: Currency = "EUR"): string {
+  const parts = new Intl.NumberFormat("en", {
+    style: "currency",
+    currency,
+    currencyDisplay: "narrowSymbol",
+  }).formatToParts(0);
+
+  return parts.find((part) => part.type === "currency")?.value ?? currency;
+}
+
 /**
  * Formateador universal inteligente (adapta el símbolo y el formato al país)
  */

@@ -5,13 +5,14 @@ import { useSubscriptionStore } from "@/features/subscriptions/store/subscriptio
 import { formatCurrency } from "@/lib/currency";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ArchiveRestore, Ghost } from "lucide-react";
+import { ArchiveRestore, Ghost, Trash2 } from "lucide-react";
 
 export function ArchiveManager() {
   const {
     archivedSubscriptions,
     fetchArchivedSubscriptions,
     restoreSubscription,
+    deleteArchivedSubscription,
   } = useSubscriptionStore();
 
   useEffect(() => {
@@ -45,14 +46,32 @@ export function ArchiveManager() {
                 <span className="capitalize">{sub.billingCycle}</span>
               </div>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => restoreSubscription(sub.id)}
-              className="gap-2 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10 border-emerald-500/30"
-            >
-              <ArchiveRestore className="w-4 h-4" /> Restore
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => restoreSubscription(sub.id)}
+                className="gap-2 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10 border-emerald-500/30"
+              >
+                <ArchiveRestore className="w-4 h-4" /> Restore
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (
+                    confirm(
+                      `Permanently delete "${sub.name}"? This cannot be undone.`,
+                    )
+                  ) {
+                    deleteArchivedSubscription(sub.id);
+                  }
+                }}
+                className="gap-2 text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
+              >
+                <Trash2 className="w-4 h-4" /> Delete
+              </Button>
+            </div>
           </div>
         ))}
       </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import { supabase } from "@/lib/supabase";
+import { BASE_CURRENCY_KEY, supabase } from "@/lib/supabase";
 import {
   Subscription,
   WorkspaceType,
@@ -48,7 +48,7 @@ interface DbPayment {
 
 interface DbBudget {
   id: string;
-  userid: string;
+  user_id: string;
   category: string;
   monthly_limit: number;
 }
@@ -134,7 +134,8 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
   setBaseCurrency: (currency) => {
     set({ baseCurrency: currency });
     if (typeof window !== "undefined") {
-      localStorage.setItem("enso_base_currency", currency);
+      localStorage.setItem(BASE_CURRENCY_KEY, currency);
+      localStorage.removeItem("ensobasecurrency");
     }
   },
 
@@ -176,7 +177,7 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
     const { data, error } = await supabase
       .from("budgets")
       .select("*")
-      .eq("userid", user.id);
+      .eq("user_id", user.id);
 
     if (error) {
       console.error("Error fetching budgets", error);
@@ -199,12 +200,12 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
 
     const { error } = await supabase.from("budgets").upsert(
       {
-        userid: user.id,
+        user_id: user.id,
         category,
         monthly_limit: limit,
-        updatedat: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       },
-      { onConflict: "userid,category" }, // Si ya existe ese par, actualiza
+      { onConflict: "user_id,category" },
     );
 
     if (error) {
@@ -234,9 +235,10 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
       const { data, error } = await supabase
         .from("subscriptions")
         .select("*")
+        .eq("user_id", user.id)
         .eq("active", true)
-        .eq("workspace", currentWorkspace) // ← filtro en DB, no en cliente
-        .order("createdat", { ascending: false });
+        .eq("workspace", currentWorkspace)
+        .order("created_at", { ascending: false });
 
       if (error) throw error;
 
@@ -260,7 +262,9 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
       // Cargar baseCurrency desde localStorage (esto sí puede seguir local)
       let loadedCurrency: Currency = "EUR";
       if (typeof window !== "undefined") {
-        const savedCurrency = localStorage.getItem("ensobasecurrency");
+        const savedCurrency =
+          localStorage.getItem(BASE_CURRENCY_KEY) ??
+          localStorage.getItem("ensobasecurrency");
         if (
           savedCurrency === "EUR" ||
           savedCurrency === "USD" ||
@@ -292,9 +296,9 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
       const { data, error } = await supabase
         .from("payments")
         .select("*")
-        .eq("userid", user.id) // ← Filtro explícito (más seguro que depender solo de RLS)
-        .order("paymentdate", { ascending: false })
-        .limit(300); // ← Límite: cubre 25 años de pagos mensuales
+        .eq("user_id", user.id)
+        .order("payment_date", { ascending: false })
+        .limit(300);
 
       if (error) throw error;
 
@@ -307,7 +311,7 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
         payment_date: p.payment_date,
         status: p.status,
         notes: p.notes,
-        createdat: p.created_at,
+        created_at: p.created_at,
       }));
 
       set({ payments: mappedPayments });
@@ -403,7 +407,7 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
     const { error: paymentsError } = await supabase
       .from("payments")
       .delete()
-      .eq("subscriptionid", id);
+      .eq("subscription_id", id);
 
     if (paymentsError) {
       console.error("Error deleting payments for subscription:", paymentsError);
@@ -414,7 +418,7 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
     // 2. Luego archivamos (soft delete) la suscripción
     const { error } = await supabase
       .from("subscriptions")
-      .update({ active: false, archivedat: new Date().toISOString() })
+      .update({ active: false, archived_at: new Date().toISOString() })
       .eq("id", id);
 
     if (error) throw error;
@@ -432,7 +436,7 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
     const dbPayload: Record<string, unknown> = {};
 
     if (data.name) dbPayload.name = data.name;
-    if (data.price) dbPayload.price = data.price;
+    if (data.price !== undefined) dbPayload.price = data.price;
     if (data.currency) dbPayload.currency = data.currency;
     if (data.billingCycle) dbPayload.billing_cycle = data.billingCycle;
     if (data.category) dbPayload.category = data.category;
@@ -485,13 +489,16 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
     const user = get().user;
     if (!user) throw new Error("Not authenticated");
 
-    await supabase.from("payments").delete().eq("userid", user.id);
-    await supabase.from("budgets").delete().eq("userid", user.id); // ← NUEVO
-    const { error } = await supabase
-      .from("subscriptions")
-      .delete()
-      .eq("userid", user.id);
-    if (error) throw error;
+    const [paymentsResult, budgetsResult, subscriptionsResult] =
+      await Promise.all([
+        supabase.from("payments").delete().eq("user_id", user.id),
+        supabase.from("budgets").delete().eq("user_id", user.id),
+        supabase.from("subscriptions").delete().eq("user_id", user.id),
+      ]);
+
+    if (paymentsResult.error) throw paymentsResult.error;
+    if (budgetsResult.error) throw budgetsResult.error;
+    if (subscriptionsResult.error) throw subscriptionsResult.error;
 
     set({ subscriptions: [], payments: [], budgets: {} });
     // Ya no hay nada que borrar de localStorage para budgets
@@ -508,7 +515,8 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
       const { data, error } = await supabase
         .from("subscriptions")
         .select("*")
-        .eq("active", false) // Solo las borradas
+        .eq("user_id", user.id)
+        .eq("active", false)
         .order("archived_at", { ascending: false });
 
       if (error) throw error;
@@ -556,7 +564,12 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
 
   deleteArchivedSubscription: async (id: string) => {
     // Cascade: pagos primero, luego la suscripción
-    await supabase.from("payments").delete().eq("subscriptionid", id);
+    const { error: paymentsError } = await supabase
+      .from("payments")
+      .delete()
+      .eq("subscription_id", id);
+
+    if (paymentsError) throw paymentsError;
 
     const { error } = await supabase
       .from("subscriptions")
@@ -578,6 +591,5 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
   signOut: async () => {
     await supabase.auth.signOut();
     set({ user: null, subscriptions: [], payments: [], budgets: {} });
-    if (typeof window !== "undefined") localStorage.removeItem("enso_budgets");
   },
 }));
