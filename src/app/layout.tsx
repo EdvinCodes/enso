@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     template: "%s | ENSO",
   },
   description:
-    "Stop losing money on forgotten subscriptions. ENSO provides local-first, privacy-focused financial clarity for your recurring expenses.",
+    "Stop losing money on forgotten subscriptions. ENSO gives you cloud-synced, privacy-focused financial clarity for your recurring expenses.",
   keywords: [
     "Finance",
     "Subscription Manager",

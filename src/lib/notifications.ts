@@ -45,6 +45,10 @@ export function getUpcomingRenewals(
   const today = startOfDay(new Date());
 
   return subscriptions.filter((sub) => {
+    if (!sub.active) return false;
+    // Los gastos puntuales no "renuevan": no deben generar avisos de cobro.
+    if (sub.billingCycle === "one_time") return false;
+
     const nextPayment = getNextPaymentDate(sub);
     const daysLeft = differenceInDays(nextPayment, today);
 

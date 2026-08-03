@@ -403,30 +403,19 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
   },
 
   deleteSubscription: async (id) => {
-    // 1. Primero borramos los pagos asociados a esta suscripción
-    const { error: paymentsError } = await supabase
-      .from("payments")
-      .delete()
-      .eq("subscription_id", id);
-
-    if (paymentsError) {
-      console.error("Error deleting payments for subscription:", paymentsError);
-      toast.error("Failed to archive subscription");
-      return;
-    }
-
-    // 2. Luego archivamos (soft delete) la suscripción
+    // Soft delete (archive): el historial de pagos se conserva intacto.
+    // El borrado en cascada de pagos ocurre solo en deleteArchivedSubscription
+    // (borrado permanente), para no perder datos al restaurar.
     const { error } = await supabase
       .from("subscriptions")
       .update({ active: false, archived_at: new Date().toISOString() })
       .eq("id", id);
 
-    if (error) throw error;
-
-    // 3. Actualizamos el estado local limpiando también los pagos
-    set((state) => ({
-      payments: state.payments.filter((p) => p.subscription_id !== id),
-    }));
+    if (error) {
+      console.error("Error archiving subscription:", error);
+      toast.error("Failed to archive subscription");
+      throw error;
+    }
 
     await get().fetchSubscriptions();
     toast.success("Subscription archived");

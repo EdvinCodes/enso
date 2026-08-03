@@ -22,6 +22,12 @@ export function getNextPaymentDate(
   const startDate = new Date(subscription.startDate);
   const cycle = subscription.billingCycle;
 
+  // Los gastos puntuales no tienen "próximo cobro": no hay ciclo que avanzar.
+  // Devolvemos la propia fecha para evitar cualquier bucle de avance infinito.
+  if (cycle === "one_time") {
+    return startOfDay(startDate);
+  }
+
   const today = startOfDay(new Date());
   let nextDate = startOfDay(startDate);
 
@@ -34,10 +40,17 @@ export function getNextPaymentDate(
     return isBefore(date, today);
   };
 
-  while (shouldAdvance(nextDate)) {
+  // Límite de seguridad: evita cualquier bucle infinito si en el futuro se
+  // añade un billingCycle no soportado aquí.
+  let safetyCounter = 0;
+  const MAX_ITERATIONS = 10000;
+
+  while (shouldAdvance(nextDate) && safetyCounter < MAX_ITERATIONS) {
     if (cycle === "monthly") nextDate = addMonths(nextDate, 1);
     else if (cycle === "yearly") nextDate = addYears(nextDate, 1);
     else if (cycle === "weekly") nextDate = addWeeks(nextDate, 1);
+    else break; // Ciclo desconocido: no avanzamos más para evitar bucles.
+    safetyCounter++;
   }
 
   return nextDate;

@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "ENSO | Finance OS",
     short_name: "ENSO",
-    description: "Master your recurring expenses. Privacy-first. Local-first.",
+    description: "Master your recurring expenses. Privacy-first. Cloud-synced.",
     start_url: "/dashboard",
     display: "standalone",
     background_color: "#09090b",

@@ -5,9 +5,9 @@
   <a href="https://enso-three.vercel.app/">
     <h1 align="center" style="font-size: 3rem; font-weight: 900;">ENSO</h1>
   </a>
-  
+
   <p align="center">
-    <strong>Master your recurring expenses. Privacy-first. Local-first.</strong>
+    <strong>Master your recurring expenses. Cloud-synced. Privacy-focused.</strong>
   </p>
 
   <p align="center">
@@ -16,6 +16,9 @@
     </a>
     <a href="https://www.typescriptlang.org/">
       <img src="https://img.shields.io/badge/TypeScript-5-blue?style=flat-square&logo=typescript" alt="TypeScript" />
+    </a>
+    <a href="https://supabase.com/">
+      <img src="https://img.shields.io/badge/Supabase-Backend-3ECF8E?style=flat-square&logo=supabase" alt="Supabase" />
     </a>
     <a href="https://tailwindcss.com/">
       <img src="https://img.shields.io/badge/Tailwind-CSS-38bdf8?style=flat-square&logo=tailwind-css" alt="Tailwind" />
@@ -28,43 +31,41 @@
 
 <br />
 
-![Dashboard Preview](./public/preview.webp)
-
 ## ✨ Introduction
 
-**ENSO** is a modern, privacy-focused subscription manager designed to stop you from bleeding money on forgotten services.
+**ENSO** is a modern subscription and recurring-expense manager that stops you from bleeding money on forgotten services.
 
-Unlike other finance apps, **ENSO has no backend**. It leverages the browser's **IndexedDB** to store all your sensitive financial data locally on your device. We cannot see your data, sell it, or leak it.
+ENSO uses **Supabase** (Postgres + Auth) as its backend: your subscriptions, payment history and budgets are synced securely across all your devices, protected by Row Level Security so only you can ever read or write your own data.
 
-Now available as an **Installable PWA**, allowing you to manage your finances offline on iOS, Android, and Desktop.
+It's also an **Installable PWA**: add it to your home screen on iOS, Android or Desktop for an app-like experience (the interface shell works offline, though creating/syncing data requires a connection).
 
 ## 🚀 Key Features
 
-### 🆕 New in v2.4
-
-- **📱 Native PWA:** Install ENSO on your phone. Works 100% offline.
+- **☁️ Cloud Sync:** Sign in with Email, Google or GitHub. Your data follows you across devices.
+- **💳 Subscription CRUD:** Track recurring subscriptions and one-time expenses with price, currency, category and billing cycle.
+- **🗄️ Archive & Restore:** Soft-delete subscriptions without losing their payment history; restore them anytime.
+- **🧾 Payment History:** Log real payments (paid / skipped / pending) per subscription and see actual vs. projected spend.
 - **🔮 Cashflow Forecast:** A 30-day predictive curve to visualize upcoming cumulative spending.
-- **🏢 Workspaces:** Separate your "Personal" expenses from "Business" overheads effortlessly.
-
-### Core Features
-
-- **🛡️ Local-First Architecture:** Built with Dexie.js. Data never leaves your device.
-- **⚡ God Mode (Cmd+K):** Navigate, search, and manage subscriptions without touching the mouse.
-- **📅 Visual Calendar:** A monthly grid view to visualize spending clusters and renewal dates.
-- **🔔 Smart Notifications:** Native system alerts 3 days before any payment is due (Serverless logic).
-- **🌍 Multi-Currency Support:** Track in USD, EUR, or GBP with real-time normalization for KPIs.
-- **📊 Interactive Analytics:** Monthly Run Rate (MRR) calculation and category distribution charts using Recharts.
+- **🏢 Workspaces:** Separate "Personal" expenses from "Business" overheads.
+- **📅 Visual Calendar:** A monthly grid view to spot spending clusters and renewal dates.
+- **💰 Budgets:** Set a monthly limit per category and track it against real spend.
+- **🔔 Smart Notifications:** Native browser alerts a few days before a recurring payment is due.
+- **🌍 Multi-Currency Support:** Track in USD, EUR or GBP with real-time FX normalization for KPIs (via the Frankfurter API, with offline fallback rates).
+- **📊 Interactive Analytics:** Monthly Run Rate (MRR) and category distribution charts.
+- **⚡ Command Palette (⌘K):** Navigate and manage subscriptions without touching the mouse.
+- **📥 Import / Export:** Back up your data as JSON, or bulk-import from CSV.
 
 ## 🛠️ Tech Stack
 
-- **Framework:** [Next.js 16](https://nextjs.org/) (App Router)
+- **Framework:** [Next.js 16](https://nextjs.org/) (App Router, `proxy.ts` route protection)
 - **Language:** TypeScript
-- **PWA Engine:** `next-pwa` + Custom Service Workers
-- **Styling:** Tailwind CSS, Framer Motion, `clsx`
+- **Backend / Auth / DB:** [Supabase](https://supabase.com/) (Postgres, Auth, Row Level Security)
+- **PWA Engine:** `next-pwa` + generated Service Worker
+- **Styling:** Tailwind CSS 4, Framer Motion, `clsx`
 - **UI Components:** [Shadcn UI](https://ui.shadcn.com/) (Radix Primitives)
-- **State Management:** Zustand (Global Store)
-- **Database:** Dexie.js (Wrapper for IndexedDB)
-- **Logic:** `date-fns` for complex recurring date algorithms
+- **State Management:** Zustand
+- **Forms & Validation:** React Hook Form + Zod
+- **Logic:** `date-fns` for recurring date algorithms
 - **Charts:** Recharts
 
 ## 📦 Getting Started
@@ -75,31 +76,55 @@ Follow these steps to run ENSO locally on your machine.
 
 - Node.js 18+
 - pnpm (recommended) or npm/yarn
+- A free [Supabase](https://supabase.com/) account/project
 
-### Installation
-
-1. **Clone the repository**
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/EdvinCodes/enso.git
 cd enso
 ```
 
-2. **Install dependencies**
+### 2. Install dependencies
 
 ```bash
 pnpm install
 ```
 
-3. **Run the development server**
+### 3. Configure Supabase
+
+ENSO requires a Supabase project for auth and data storage — there is no local/offline data store.
+
+1. Create a project at [supabase.com](https://supabase.com).
+2. In **Project Settings > API**, copy your **Project URL** and **anon public key**.
+3. In the **SQL Editor**, run the migration in [`supabase/migrations/001_initial_schema.sql`](./supabase/migrations/001_initial_schema.sql). This creates the `subscriptions`, `payments` and `budgets` tables with Row Level Security policies.
+4. In **Authentication > Providers**, enable **Email**. Optionally enable **Google** and/or **GitHub** for social login.
+5. In **Authentication > URL Configuration**, add your callback URL as an allowed redirect URL:
+   - `http://localhost:3000/auth/callback` (development)
+   - `https://your-domain.com/auth/callback` (production)
+
+### 4. Set environment variables
+
+Copy the example file and fill in your Supabase credentials:
 
 ```bash
-pnpm run dev
+cp .env.example .env.local
 ```
 
-4. **Open your browser**
-   Navigate to [http://localhost:3000](http://localhost:3000) to see the Landing Page.
-   Click "Launch App" to access the Dashboard.
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+```
+
+### 5. Run the development server
+
+```bash
+pnpm dev
+```
+
+### 6. Open your browser
+
+Navigate to [http://localhost:3000](http://localhost:3000). Register an account, then you'll be redirected straight to the dashboard.
 
 ## 📂 Project Structure
 
@@ -107,34 +132,39 @@ pnpm run dev
 src/
 ├── app/
 │   ├── page.tsx            # Landing Page (Marketing)
-│   ├── dashboard/          # The actual App (Protected route logic)
-│   ├── icons/              # Dynamic PWA Icon generation
+│   ├── login/, register/   # Auth pages
+│   ├── auth/callback/      # OAuth code exchange route
+│   ├── dashboard/          # The actual App (auth-protected)
 │   └── globals.css         # Tailwind & Global Styles
+├── proxy.ts                 # Route protection (Next.js 16 Proxy, ex-middleware)
 ├── components/
 │   ├── ui/                 # Shadcn reusable components
-│   └── command-menu.tsx    # God Mode implementation
+│   └── command-menu.tsx    # Command palette (⌘K)
 ├── features/
-│   ├── subscriptions/      # Core Domain Logic (Components, Store, Schema)
+│   ├── subscriptions/      # Core Domain Logic (Components, Zustand Store, Zod Schema)
 │   ├── calendar/           # Calendar View Logic
 │   ├── dashboard/          # Forecast & KPI Charts
-│   └── settings/           # Data Management (Backup/Restore)
+│   └── settings/           # Budgets, Archive, Backup/CSV import-export
 ├── lib/
-│   ├── db.ts               # Database configuration (Dexie)
+│   ├── supabase.ts         # Supabase browser client
 │   ├── dates.ts            # Centralized Date & Payment Logic
 │   ├── forecast.ts         # Cashflow Projection Algorithms
-│   └── notifications.ts    # Notification API Logic
-└── public/                 # Static assets & Manifest
+│   ├── currency.ts         # Multi-currency FX normalization
+│   └── notifications.ts    # Browser Notification API Logic
+└── supabase/
+    └── migrations/         # SQL schema & RLS policies
 ```
 
 ## 🔮 Roadmap
 
 - [x] Core Subscription Management (CRUD)
-- [x] Local Storage Persistence
-- [x] Dashboard & Calendar Views
+- [x] Supabase Cloud Sync + Auth (Email, Google, GitHub)
+- [x] Dashboard, Calendar & Budgets
 - [x] Smart Notifications
-- [x] **PWA Support (Install on Mobile)**
-- [x] **Cashflow Forecast**
-- [ ] End-to-End Encryption Sync
+- [x] PWA Support (Install on Mobile/Desktop)
+- [x] Cashflow Forecast
+- [ ] Automated tests (unit / e2e)
+- [ ] End-to-End Encryption for sensitive fields
 - [ ] Bank API Integration (Plaid/GoCardless)
 
 ## 🤝 Contributing
@@ -149,7 +179,7 @@ Contributions are welcome! If you find a bug or have a feature request, please o
 
 ## 📄 License
 
-Distributed under the MIT License. See `LICENSE` for more information.
+Distributed under the MIT License. See [`LICENSE`](./LICENSE) for more information.
 
 ---
 
